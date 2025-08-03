@@ -1,0 +1,14 @@
+channels:
+  - defaults
+dependencies:
+  - numpy
+  - pandas
+  - matplotlib
+  - scikit-learn
+  - seaborn
+  - xgboost
+  - networkx
+  - pytorch::pytorch
+  - torchaudio
+  - torchvision
+  - ipykernel
