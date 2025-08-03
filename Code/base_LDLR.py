@@ -643,7 +643,7 @@ def plot_learning_curve(data,n_folds,save_path,data_name,shortest_path_len_file,
 
 
 if __name__=='__main__':
-    DATA_DIREC = '../Datasets/'
+    DATA_DIREC = '../Data/'
     PLOT_DIREC = '../Plot/'
     plot_learning_curve(data = DATA_DIREC+'LDLR/train_node_attribute_LDLR_with_target_feature.csv',
                     n_folds = 5,

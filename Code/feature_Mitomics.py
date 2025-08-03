@@ -31,7 +31,7 @@ from torch.utils.data import Dataset,DataLoader
 import torch.optim as optim
 warnings.filterwarnings('ignore')
 
-DATA_DIREC = '../Datasets/'
+DATA_DIREC = '../Data/'
 
 def seed_everything(seed=123):
     """"
@@ -486,7 +486,7 @@ def calc_Comparison_Metrics(feature_path,feature_list,feature_group,save_path,da
         sem_prc_df.to_csv(save_path+model_name+'_'+data_name+'sem_prc_df.csv')
     
 if __name__=='__main__':
-    DATA_DIREC = '../Datasets/'
+    DATA_DIREC = '../Data/'
     PLOT_DIREC = '../Plot/'
     feature_list =['Source','Target','Source_Target_Relation','All']
     feature_group = ['source_feature','target_feature','ppi_feature','All']

@@ -469,7 +469,7 @@ def calc_Comparison_Metrics(feature_path_list,feature_list,n_fold,save_path,data
 
 if __name__=='__main__':
     ###
-    DATA_DIREC = '../Datasets/'
+    DATA_DIREC = '../Data/'
     PLOT_DIREC = '../Plot/'
     ## To generate figure 4 and 5, please do
     ## a. Define the feature groups by feature_list and feature_path_list.

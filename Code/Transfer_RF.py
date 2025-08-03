@@ -74,7 +74,7 @@ class CustomDataset(Dataset):
     
 
 ##
-DATA_DIREC = '../Datasets/'
+DATA_DIREC = '../Data/'
 PLOT_DIREC = '../Plot/'
 
 ## ST-relation features only
