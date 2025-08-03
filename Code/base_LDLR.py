@@ -358,8 +358,7 @@ def train_MLP(data,n_folds,target,phenotype,start_ratio = 1):
                         model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
                 n_pos = y_train.sum().item()
                 n_neg = y_train.numel() - n_pos
-                eps = 1e-8
-                pos_w = torch.tensor([n_neg / (n_pos+eps)])
+                pos_w = torch.tensor([n_neg / n_pos])
                 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
                 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
             else:
@@ -367,8 +366,7 @@ def train_MLP(data,n_folds,target,phenotype,start_ratio = 1):
                 model = MLP_1_relu(X_train.shape[1],hidden_size=128,dropout_rate=0.3)
                 n_pos = y_train.sum().item()
                 n_neg = y_train.numel() - n_pos
-                eps = 1e-8
-                pos_w = torch.tensor([n_neg / (n_pos+eps)])
+                pos_w = torch.tensor([n_neg / n_pos])
                 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
                 optimizer = optim.Adam(model.parameters(), lr=1e-3)
             train_dataset = CustomDataset(X_train,y_train)
@@ -644,25 +642,24 @@ def plot_learning_curve(data,n_folds,save_path,data_name,shortest_path_len_file,
 
 
 
-
 if __name__=='__main__':
     DATA_DIREC = '../Datasets/'
     PLOT_DIREC = '../Plot/'
-    plot_learning_curve(data = DATA_DIREC+'train_node_attribute_SREBP2_with_target_feature.csv',
+    plot_learning_curve(data = DATA_DIREC+'LDLR/train_node_attribute_LDLR_with_target_feature.csv',
                     n_folds = 5,
-                    save_path = PLOT_DIREC+'SREBP2/',
-                    shortest_path_len_file = DATA_DIREC+'SREBP2/shortest_path_length_data.csv',
-                    data_name = 'SREBP2',
-                    target = list(np.load(DATA_DIREC+'targets/SREBP2_target.npy')),
+                    save_path = PLOT_DIREC+'LDLR/',
+                    shortest_path_len_file = DATA_DIREC+'LDLR/shortest_path_length_data.csv',
+                    data_name = 'LDLR',
+                    target = list(np.load(DATA_DIREC+'targets/LDLR_target.npy')),
                     rw_positive_state = [10],
                     rwr_positive_state = [0.6],
                     heat_positive_state = [0.1],
-                    rw_target_state = [10],
-                    rwr_target_state = [0.6],
+                    rw_target_state = [30],
+                    rwr_target_state = [0.2],
                     heat_target_state = [0.1],
                     start_ratio = 1,
                     save_fig1 = True,
                     save_fig2 = True,
-                    phenotype = 'SREBP2',
-                    plot_title = 'Cholesterol homeostasis'
+                    phenotype = 'LDLR',
+                    plot_title = 'Cholesterol uptake'
                     )
