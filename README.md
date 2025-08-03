@@ -31,7 +31,7 @@ Code accompanying the paper "A graph-based learning approach to predict the effe
 
 
 ### Prerequisites
-- necessary packages are listed in file environment.yml
+- necessary packages are listed in file [environment.yml](environment.yml)
 
 ### Instructions
 - In this paper we collect four phenotypes as well as four machine learning methods, each phenotype and method has its own abbreviation in the script name.  
@@ -44,10 +44,10 @@ Random Forest ── RF
 XGBoost ── XGB  
 Neural Network ── NN  
 
-- To replicate Figure 2 and 3 for a phenotype, run base_{phenotype}. e.g. For phenotype cholesterol uptake, run base_LDLR.py  
-- To replicate Figure 4, first run feature_subgraph_{phenotype}.py for each phenotype, then run Feature_importance.ipynb.  
-- To replicate Figure 5, first run feature_feature_group_{phenotype}.py for each phenotype, then run Feature_importance.ipynb.  
-- For phenotype Mitochondrial protein abundance, feature_Mitomics.py would generate files for both Figure 4 and 5.  
+- To replicate Figure 2 and 3 for a phenotype, run base_{phenotype}. e.g. For phenotype cholesterol uptake, run [base_LDLR.py](base_LDLR.py)    
+- To replicate Figure 4, first run feature_subgraph_{phenotype}.py for each phenotype, then run [Feature_importance.ipynb](Feature_importance.ipynb).  
+- To replicate Figure 5, first run feature_feature_group_{phenotype}.py for each phenotype, then run [Feature_importance.ipynb](Feature_importance.ipynb).  
+- For phenotype Mitochondrial protein abundance, [feature_Mitomics.py](feature_Mitomics.py) would generate files for both Figure 4 and 5.  
 - To replicate Figure 6, first run Transfer_{ML-method}.py, then run Transfer_learning.ipynb.
 
 
