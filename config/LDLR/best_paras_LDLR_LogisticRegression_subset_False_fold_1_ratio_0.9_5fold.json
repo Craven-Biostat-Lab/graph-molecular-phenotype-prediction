@@ -1,0 +1,1 @@
+{"l1_ratio": 0.4, "C": 0.1, "penalty": "elasticnet", "max_iter": 5000}

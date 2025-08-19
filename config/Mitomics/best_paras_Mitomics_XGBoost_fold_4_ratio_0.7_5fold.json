@@ -1,0 +1,1 @@
+{"max_depth": 10, "reg_alpha": 1.0, "colsample_bytree": 0.6, "eta": 0.05, "subsample": 0.6, "min_child_weight": 1}
