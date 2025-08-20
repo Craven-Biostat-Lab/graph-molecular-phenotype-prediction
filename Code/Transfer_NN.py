@@ -202,10 +202,10 @@ for train_dataset in train_list:
                         elif activation_type == 'relu':
                             seed_everything()
                             model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                    n_pos = y_train.sum().item()
-                    n_neg = y_train.numel() - n_pos
-                    pos_w = torch.tensor([n_neg / n_pos])
-                    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
+                    # n_pos = y_train.sum().item()
+                    # n_neg = y_train.numel() - n_pos
+                    # pos_w = torch.tensor([n_neg / n_pos])
+                    criterion = nn.BCEWithLogitsLoss()
                     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
                     for epoch in range(num_epoch):
                         model.train()
@@ -263,10 +263,10 @@ for train_dataset in train_list:
                         elif activation_type == 'relu':
                             seed_everything()
                             model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                    n_pos = y_train.sum().item()
-                    n_neg = y_train.numel() - n_pos
-                    pos_w = torch.tensor([n_neg / n_pos])
-                    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
+                    # n_pos = y_train.sum().item()
+                    # n_neg = y_train.numel() - n_pos
+                    # pos_w = torch.tensor([n_neg / n_pos])
+                    criterion = nn.BCEWithLogitsLoss()
                     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
                     for epoch in range(num_epoch):
                         model.train()
@@ -320,10 +320,10 @@ for train_dataset in train_list:
                 elif activation_type == 'relu':
                     seed_everything()
                     model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-            n_pos = y_train.sum().item()
-            n_neg = y_train.numel() - n_pos
-            pos_w = torch.tensor([n_neg / n_pos])
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
+            # n_pos = y_train.sum().item()
+            # n_neg = y_train.numel() - n_pos
+            # pos_w = torch.tensor([n_neg / n_pos])
+            criterion = nn.BCEWithLogitsLoss()
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
             for epoch in range(num_epoch):
                 model.train()
@@ -425,10 +425,10 @@ for train_dataset in train_list:
                         elif activation_type == 'relu':
                             seed_everything()
                             model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                    n_pos = y_train.sum().item()
-                    n_neg = y_train.numel() - n_pos
-                    pos_w = torch.tensor([n_neg / n_pos])
-                    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
+                    # n_pos = y_train.sum().item()
+                    # n_neg = y_train.numel() - n_pos
+                    # pos_w = torch.tensor([n_neg / n_pos])
+                    criterion = nn.BCEWithLogitsLoss()
                     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
                     for epoch in range(num_epoch):
                         model.train()
@@ -486,10 +486,10 @@ for train_dataset in train_list:
                         elif activation_type == 'relu':
                             seed_everything()
                             model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                    n_pos = y_train.sum().item()
-                    n_neg = y_train.numel() - n_pos
-                    pos_w = torch.tensor([n_neg / n_pos])
-                    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
+                    # n_pos = y_train.sum().item()
+                    # n_neg = y_train.numel() - n_pos
+                    # pos_w = torch.tensor([n_neg / n_pos])
+                    criterion = nn.BCEWithLogitsLoss()
                     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
                     for epoch in range(num_epoch):
                         model.train()
@@ -543,10 +543,10 @@ for train_dataset in train_list:
                 elif activation_type == 'relu':
                     seed_everything()
                     model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-            n_pos = y_train.sum().item()
-            n_neg = y_train.numel() - n_pos
-            pos_w = torch.tensor([n_neg / n_pos])
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
+            # n_pos = y_train.sum().item()
+            # n_neg = y_train.numel() - n_pos
+            # pos_w = torch.tensor([n_neg / n_pos])
+            criterion = nn.BCEWithLogitsLoss()
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
             for epoch in range(num_epoch):
                 model.train()
@@ -646,10 +646,10 @@ for train_dataset in train_list:
                         elif activation_type == 'relu':
                             seed_everything()
                             model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                    n_pos = y_train.sum().item()
-                    n_neg = y_train.numel() - n_pos
-                    pos_w = torch.tensor([n_neg / n_pos])
-                    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w) 
+                    # n_pos = y_train.sum().item()
+                    # n_neg = y_train.numel() - n_pos
+                    # pos_w = torch.tensor([n_neg / n_pos])
+                    criterion = nn.BCEWithLogitsLoss() 
                     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
                     for epoch in range(num_epoch):
                         model.train()
@@ -707,10 +707,10 @@ for train_dataset in train_list:
                         elif activation_type == 'relu':
                             seed_everything()
                             model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                    n_pos = y_train.sum().item()
-                    n_neg = y_train.numel() - n_pos
-                    pos_w = torch.tensor([n_neg / n_pos])
-                    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
+                    # n_pos = y_train.sum().item()
+                    # n_neg = y_train.numel() - n_pos
+                    # pos_w = torch.tensor([n_neg / n_pos])
+                    criterion = nn.BCEWithLogitsLoss()
                     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
                     for epoch in range(num_epoch):
                         model.train()
@@ -764,10 +764,10 @@ for train_dataset in train_list:
                 elif activation_type == 'relu':
                     seed_everything()
                     model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-            n_pos = y_train.sum().item()
-            n_neg = y_train.numel() - n_pos
-            pos_w = torch.tensor([n_neg / n_pos])
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w) 
+            # n_pos = y_train.sum().item()
+            # n_neg = y_train.numel() - n_pos
+            # pos_w = torch.tensor([n_neg / n_pos])
+            criterion = nn.BCEWithLogitsLoss() 
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
             for epoch in range(num_epoch):
                 model.train()

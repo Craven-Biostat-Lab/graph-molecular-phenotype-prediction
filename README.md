@@ -5,26 +5,33 @@ Code accompanying the paper "A graph-based learning approach to predict the effe
 
 ## 📁 Folder Structure
  ```.
-├──Datasets
-    ├──Influenza
-        ├──split_feature_group
-        ├──split_subgraph
-        ├──other data file
-    ├──SREBP2
-        ├──split_feature_group
-        ├──split_subgraph
-        ├──other data file
-    ├──LDLR
-        ├──split_feature_group
-        ├──split_subgraph
-        ├──other data file
-    ├──Mitomics
-        ├──split_feature_group
-        ├──split_subgraph
-        ├──other data file
-    ├──targets
-    ├──config
-├──Code
+Legend: `/` = directory, no suffix = file
+├──Datasets/
+    ├──Influenza/
+        ├──split_feature_group/
+        ├──split_subgraph/
+        ├──other data files
+    ├──SREBP2/
+        ├──split_feature_group/
+        ├──split_subgraph/
+        ├──other data files
+    ├──LDLR/
+        ├──split_feature_group/
+        ├──split_subgraph/
+        ├──other data files
+    ├──Mitomics/
+        ├──split_feature_group/
+        ├──split_subgraph/
+        ├──other data files
+    ├──targets/ (target list for each phenotype)
+    ├──Raw
+        ├──cellular-localization/ (celltype-specific protein abundance)
+        ├──{phenotype}/ (instance list for each phenotype)
+        ├──go_embedding_64.csv
+        ├──subcellular-localization.csv 
+        ├──uniprot_reactome_hpa_merged_stringid.csv (raw file for subcellular localization)
+    ├──config/ (tuned hyperparameters for each model for each phenotype for each fold for each subset)
+├──Code/
 ```
 
 ## 🚀 Getting Started
