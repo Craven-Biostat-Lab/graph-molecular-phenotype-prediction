@@ -34,6 +34,7 @@ Code accompanying the paper "A graph-based learning approach to predict the effe
 - necessary packages are listed in file [environment.yml](environment.yml)
 
 ### Instructions
+- The workflow of the proposed method is shown as ![Workflow](Workflow.png)
 - In this paper we collect four phenotypes as well as four machine learning methods, each phenotype and method has its own abbreviation in the script name.  
 Cholesterol homeostasis ── SREBP2  
 Cholesterol uptake ── LDLR  
