@@ -24,7 +24,7 @@ Legend: `/` = directory, no suffix = file
         ├──split_subgraph/
         ├──other data files
     ├──targets/ (target list for each phenotype)
-    ├──Raw
+    ├──Raw/
         ├──cellular-localization/ (celltype-specific protein abundance)
         ├──{phenotype}/ (instance list for each phenotype)
         ├──go_embedding_64.csv
@@ -32,6 +32,8 @@ Legend: `/` = directory, no suffix = file
         ├──uniprot_reactome_hpa_merged_stringid.csv (raw file for subcellular localization)
     ├──config/ (tuned hyperparameters for each model for each phenotype for each fold for each subset)
 ├──Code/
+├──Plot/
+    ├──{phenotype}/ (Files necessary for feature importance and transfer learning replication)
 ```
 
 ## 🚀 Getting Started
