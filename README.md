@@ -33,7 +33,8 @@ Legend: `/` = directory, no suffix = file
     ├──config/ (tuned hyperparameters for each model for each phenotype for each fold for each subset)
 ├──Code/
 ├──Plot/
-    ├──{phenotype}/ (Files necessary for feature importance and transfer learning replication)
+    ├──{phenotype}/ (Files necessary for feature importance replication)
+    ├──Transfer_tuned/ (Files for transfer learning replication)
 ```
 
 ## 🚀 Getting Started
