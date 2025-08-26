@@ -32,6 +32,8 @@ Legend: `/` = directory, no suffix = file
         ├──uniprot_reactome_hpa_merged_stringid.csv (raw file for subcellular localization)
     ├──config/ (tuned hyperparameters for each model for each phenotype for each fold for each subset)
 ├──Code/
+    ├──Dataset/
+    ├──Figures/
 ├──Plot/
     ├──{phenotype}/ (Files necessary for feature importance replication)
     ├──Transfer_tuned/ (Files for transfer learning replication)
@@ -55,11 +57,11 @@ Random Forest ── RF
 XGBoost ── XGB  
 Neural Network ── NN  
 
-- To replicate Figure 2 and 3 for a phenotype, run base_{phenotype}. e.g. For phenotype cholesterol uptake, run [base_LDLR.py](./Code/base_LDLR.py)    
-- To replicate Figure 4, first run feature_subgraph_{phenotype}.py for each phenotype, then run [Feature_importance.ipynb](./Code/Feature_importance.ipynb).  
-- To replicate Figure 5, first run feature_feature_group_{phenotype}.py for each phenotype, then run [Feature_importance.ipynb](./Code/Feature_importance.ipynb).  
-- For phenotype Mitochondrial protein abundance, [feature_Mitomics.py](./Code/feature_Mitomics.py) would generate files for both Figure 4 and 5.  
-- To replicate Figure 6, first run Transfer_{ML-method}.py, then run [Transfer_learning.ipynb](./Code/Transfer_learning.ipynb).
+- To replicate Figure 2 and 3 for a phenotype, run base_{phenotype}. e.g. For phenotype cholesterol uptake, run [base_LDLR.py](./Code/Figures/base_LDLR.py)    
+- To replicate Figure 4, first run feature_subgraph_{phenotype}.py for each phenotype, then run [Feature_importance.ipynb](./Code/Figures/Feature_importance.ipynb).  
+- To replicate Figure 5, first run feature_feature_group_{phenotype}.py for each phenotype, then run [Feature_importance.ipynb](./Code/Figures/Feature_importance.ipynb).  
+- For phenotype Mitochondrial protein abundance, [feature_Mitomics.py](./Code/Figures/feature_Mitomics.py) would generate files for both Figure 4 and 5.  
+- To replicate Figure 6, first run Transfer_{ML-method}.py, then run [Transfer_learning.ipynb](./Code/Figures/Transfer_learning.ipynb).
 
 
 
