@@ -466,23 +466,37 @@ def calc_Comparison_Metrics(feature_path_list,feature_list,n_fold,save_path,data
         pool_prc_df.to_csv(save_path+model_name+'_'+data_name+'pool_prc_df.csv')
         mean_prc_df.to_csv(save_path+model_name+'_'+data_name+'mean_prc_df.csv')
         sem_prc_df.to_csv(save_path+model_name+'_'+data_name+'sem_prc_df.csv')
+
 if __name__=='__main__':
-    DATA_DIREC = '../Data/'
-    PLOT_DIREC = '../Plot/'
+    ###
+    DATA_DIREC = '../../Data/'
+    PLOT_DIREC = '../../Plot/'
+    ## To generate figure 4 and 5, please do
+    ## a. Define the feature groups by feature_list and feature_path_list.
+    ## e.g. If we want to compare learned model performances learned from individual subgraph feature groups 
+    ## We can set 
     feature_list = ['Source','Target','Source_Target_Relation','All']
-    feature_path_list = [DATA_DIREC+'SREBP2/split_subgraph/source_feature_SREBP2.csv',
-                        DATA_DIREC+'SREBP2/split_subgraph/target_feature_SREBP2.csv',
-                        DATA_DIREC+'SREBP2/split_subgraph/ppi_feature_SREBP2.csv',
-                        DATA_DIREC+'SREBP2/train_node_attribute_SREBP2_with_target_feature.csv']
+    feature_path_list = [DATA_DIREC+'LDLR/split_subgraph/source_feature_LDLR.csv',
+                        DATA_DIREC+'LDLR/split_subgraph/target_feature_LDLR.csv',
+                        DATA_DIREC+'LDLR/split_subgraph/ppi_feature_LDLR.csv',
+                        DATA_DIREC+'LDLR/train_node_attribute_LDLR_with_target_feature.csv']
+    
+    ## b. Run the plot_Comparison_ROC function
+    ## Arguments explained
+    ## 1. data_name: data_name: description of the dataset, would be used as the generated plot name. e.g. LDLR
+    ## 2. phenotype: phenotype name. e.g. "LDLR"
+    ## 3. target: path of the .npy file storing the target proteins for the phenotype. e.g. ~/Raw/targets/LDLR_target.npy
+    ## 4-7 lr_config, rf_config, xgb_config, mlp_config: path of the model hyperparameter files (.json). e.g. ~/Config/LDLR_6/best_paras_LDLR_XGBoost_subset_False_with_target_True.json
+    
     calc_Comparison_Metrics(feature_path_list,feature_list,n_fold=5,
-                        save_path = PLOT_DIREC+'SREBP2/',
-                        data_name = 'Subgraph_feature_comparison_SREBP2_',
-                        phenotype = 'SREBP2',
-                        target=list(np.load(DATA_DIREC+'targets/SREBP2_target.npy')),
-                        lr_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_LogisticRegression_subset_False_fold_',
-                        rf_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_RandomForest_subset_False_fold_',
-                        xgb_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_XGBoost_subset_False_fold_',
-                        mlp_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_MLP_subset_False_fold_'
+                        save_path = PLOT_DIREC+'LDLR/',
+                        data_name = 'Subgraph_feature_comparison_LDLR_',
+                        phenotype = 'LDLR',
+                        target=list(np.load(DATA_DIREC+'targets/LDLR_target.npy')),
+                        lr_config = DATA_DIREC+'config/LDLR/best_paras_LDLR_LogisticRegression_subset_False_fold_',
+                        rf_config = DATA_DIREC+'config/LDLR/best_paras_LDLR_RandomForest_subset_False_fold_',
+                        xgb_config = DATA_DIREC+'config/LDLR/best_paras_LDLR_XGBoost_subset_False_fold_',
+                        mlp_config = DATA_DIREC+'config/LDLR/best_paras_LDLR_MLP_subset_False_fold_'
                         )
 
 

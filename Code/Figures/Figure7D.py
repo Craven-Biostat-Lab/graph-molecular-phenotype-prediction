@@ -19,8 +19,8 @@ import torch.nn as nn
 from torch.utils.data import Dataset,DataLoader
 warnings.filterwarnings('ignore')
 
-DATA_DIREC = '../Data/'
-PLOT_DIREC = '../Plot/'
+DATA_DIREC = '../../Data/'
+PLOT_DIREC = '../../Plot/'
 
 
 def seed_everything(seed=123):

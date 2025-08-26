@@ -467,8 +467,8 @@ def calc_Comparison_Metrics(feature_path_list,feature_list,n_fold,save_path,data
         mean_prc_df.to_csv(save_path+model_name+'_'+data_name+'mean_prc_df.csv')
         sem_prc_df.to_csv(save_path+model_name+'_'+data_name+'sem_prc_df.csv')
 if __name__=='__main__':
-    DATA_DIREC = '../Data/'
-    PLOT_DIREC = '../Plot/'
+    DATA_DIREC = '../../Data/'
+    PLOT_DIREC = '../../Plot/'
     feature_list = ['Abundance','Subcell','Source_Target_Relation','GO','All']
     feature_path_list = [DATA_DIREC+'Influenza/split_feature_group/abundance_feature_Influenza.csv',
                         DATA_DIREC+'Influenza/split_feature_group/localization_feature_Influenza.csv',

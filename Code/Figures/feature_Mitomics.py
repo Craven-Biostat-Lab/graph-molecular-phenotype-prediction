@@ -3,23 +3,21 @@ from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
 from sklearn.model_selection import StratifiedKFold
 import pandas as pd
-from sklearn.metrics import roc_curve, auc,average_precision_score,f1_score,roc_auc_score
 from imblearn.over_sampling import RandomOverSampler
+from sklearn.metrics import roc_curve, auc,roc_auc_score
 import matplotlib.pyplot as plt
 import numpy as np
 import statistics
 import math
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset,DataLoader
+from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import average_precision_score
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.inspection import permutation_importance
 from sklearn.preprocessing import MinMaxScaler
 import argparse
-import torch.optim as optim
-# import merge_feature as mf 
-# from stringdb_alias import HGNCMapper
+import merge_feature as mf 
+from stringdb_alias import HGNCMapper
 from sklearn.utils.class_weight import compute_class_weight
 import seaborn as sns
 import json
@@ -27,21 +25,22 @@ import random
 import os
 import math
 import warnings
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset,DataLoader
+import torch.optim as optim
 warnings.filterwarnings('ignore')
 
+DATA_DIREC = '../Data/'
 
 def seed_everything(seed=123):
     """"
     Seed everything.
     """   
     random.seed(seed)
+    torch.manual_seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
-
-def move2last(feature_df,col_to_move):
-    other_columns = [col for col in feature_df.columns if col != col_to_move]
-    feature_df = feature_df.reindex(columns=[*other_columns, col_to_move])
-    return feature_df
 
 def split_val(df):
     all_indexes = df.index.tolist()
@@ -126,35 +125,29 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.features[idx], self.labels[idx]
-
-
-def train_lr(data,n_folds,target,lr_config_path = None):
-    target_data = data.loc[target,:]
-    target_data['label'] = 1
-    data = data.drop(target)
-    skf = StratifiedKFold(n_splits = n_folds, shuffle=True,random_state=123)
-    all_pred,all_true,fold_auroc,fold_auprc = list(),list(),list(),list()
-    for i, (train_index, test_index) in enumerate(skf.split(data.iloc[:,:-1], data.iloc[:,-1])):
-        train_data = data.iloc[train_index,:]
-        test_data = data.iloc[test_index,:]
-        target_fold = target_data.copy()
-        train_data = pd.concat([train_data,target_fold])
-        train_data = move2last(train_data,'label')
-        X_train = np.array(train_data.iloc[:,:-1])
-        y_train = np.array(train_data.iloc[:,-1])
-        X_test = np.array(test_data.iloc[:,:-1])
-        y_test = np.array(test_data.iloc[:,-1])
-        ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
-        X_train, y_train = ros.fit_resample(X_train, y_train)
-        if lr_config_path != None:
-            lr_fold_config = lr_config_path+str(i)+'_ratio_1.0_5fold.json'
-            lr_fold_config = json.load(open(lr_fold_config))
-            if lr_fold_config['penalty'] == 'elasticnet':
+    
+def train_lr(data_path,feature_name):
+    all_pred,all_true,fold_auroc,fold_auprc= list(),list(),list(),list()
+    for i in range(5):
+        lr_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_mitomics_LogisticRegression_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+        if feature_name != 'All':
+            train_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_train_by_source.csv',index_col = 0)
+            test_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_test_by_source.csv',index_col = 0)
+        else:
+            train_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            train_data = train_data.drop(['Target'],axis = 1)
+            test_data = test_data.drop(['Target'],axis = 1)
+        # print(i)
+        X_train,y_train = np.array(train_data.iloc[:,:-1]),np.array(train_data.iloc[:,-1])
+        X_test,y_test = np.array(test_data.iloc[:,:-1]),np.array(test_data.iloc[:,-1])
+        if lr_config != None:
+            if lr_config['penalty'] == 'elasticnet':
                 seed_everything()
-                model = LogisticRegression(**lr_fold_config,solver = 'saga',class_weight='balanced')
+                model = LogisticRegression(**lr_config,solver = 'saga',class_weight='balanced')
             else:
                 seed_everything()
-                model = LogisticRegression(**lr_fold_config,class_weight='balanced')
+                model = LogisticRegression(**lr_config,class_weight='balanced')
         else:
             seed_everything()
             model = LogisticRegression(max_iter = 5000, class_weight='balanced')
@@ -164,31 +157,26 @@ def train_lr(data,n_folds,target,lr_config_path = None):
         all_pred.extend(test_score)
         fold_auroc.append(roc_auc_score(y_test,test_score))
         fold_auprc.append(average_precision_score(y_test,test_score))
+    # print(fold_auroc)
     return all_true,all_pred,fold_auroc,fold_auprc
         
-def train_rf(data,n_folds,target,rf_config_path = None):
-    target_data = data.loc[target,:]
-    target_data['label'] = 1
-    data = data.drop(target)
-    skf = StratifiedKFold(n_splits = n_folds, shuffle=True,random_state=123)
-    all_pred,all_true, fold_auroc, fold_auprc= list(),list(),list(),list()
-    for i, (train_index, test_index) in enumerate(skf.split(data.iloc[:,:-1], data.iloc[:,-1])):
-        train_data = data.iloc[train_index,:]
-        test_data = data.iloc[test_index,:]
-        target_fold = target_data.copy()
-        train_data = pd.concat([train_data,target_fold])
-        train_data = move2last(train_data,'label')
-        X_train = np.array(train_data.iloc[:,:-1])
-        y_train = np.array(train_data.iloc[:,-1])
-        X_test = np.array(test_data.iloc[:,:-1])
-        y_test = np.array(test_data.iloc[:,-1])
-        ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
-        X_train, y_train = ros.fit_resample(X_train, y_train)
-        if rf_config_path != None:
-            rf_fold_config = rf_config_path+str(i)+'_ratio_1.0_5fold.json'
-            rf_fold_config = json.load(open(rf_fold_config))
+def train_rf(data_path,feature_name):
+    all_pred,all_true,fold_auroc,fold_auprc= list(),list(),list(),list()
+    for i in range(5):
+        rf_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_mitomics_RandomForest_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+        if feature_name != 'All':
+            train_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_train_by_source.csv',index_col = 0)
+            test_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_test_by_source.csv',index_col = 0)
+        else:
+            train_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            train_data = train_data.drop(['Target'],axis = 1)
+            test_data = test_data.drop(['Target'],axis = 1)
+        X_train,y_train = np.array(train_data.iloc[:,:-1]),np.array(train_data.iloc[:,-1])
+        X_test,y_test = np.array(test_data.iloc[:,:-1]),np.array(test_data.iloc[:,-1])
+        if rf_config != None:
             seed_everything()
-            model = RandomForestClassifier(**rf_fold_config,class_weight='balanced')
+            model = RandomForestClassifier(**rf_config,class_weight='balanced')
         else:
             seed_everything()
             model = RandomForestClassifier(n_estimators=1000,class_weight='balanced')
@@ -200,31 +188,25 @@ def train_rf(data,n_folds,target,rf_config_path = None):
         fold_auprc.append(average_precision_score(y_test,test_score))
     return all_true,all_pred,fold_auroc,fold_auprc
 
-def train_xgb(data,n_folds,target,xgb_config_path = None):
-    target_data = data.loc[target,:]
-    target_data['label'] = 1
-    data = data.drop(target)
-    skf = StratifiedKFold(n_splits = n_folds, shuffle = True,random_state = 123)
-    all_pred,all_true, fold_auroc, fold_auprc= list(),list(),list(),list()
-    for i, (train_index, test_index) in enumerate(skf.split(data.iloc[:,:-1], data.iloc[:,-1])):
-        train_data = data.iloc[train_index,:]
-        test_data = data.iloc[test_index,:]
-        target_fold = target_data.copy()
-        train_data = pd.concat([train_data,target_fold])
-        train_data = move2last(train_data,'label')
-        X_train = np.array(train_data.iloc[:,:-1])
-        y_train = np.array(train_data.iloc[:,-1])
-        ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
-        X_train, y_train = ros.fit_resample(X_train, y_train)
-        X_test = np.array(test_data.iloc[:,:-1])
-        y_test = np.array(test_data.iloc[:,-1])
+def train_xgb(data_path,feature_name):
+    all_pred,all_true,fold_auroc,fold_auprc= list(),list(),list(),list()
+    for i in range(5):
+        xgb_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+        if feature_name != 'All':
+            train_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_train_by_source.csv',index_col = 0)
+            test_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_test_by_source.csv',index_col = 0)
+        else:
+            train_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            train_data = train_data.drop(['Target'],axis = 1)
+            test_data = test_data.drop(['Target'],axis = 1)
+        X_train,y_train = np.array(train_data.iloc[:,:-1]),np.array(train_data.iloc[:,-1])
+        X_test,y_test = np.array(test_data.iloc[:,:-1]),np.array(test_data.iloc[:,-1])
         class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
         class_weight={0: class_weights[0], 1: class_weights[1]}
-        if xgb_config_path != None:
-            xgb_fold_config = xgb_config_path+str(i)+'_ratio_1.0_5fold.json'
-            xgb_fold_config = json.load(open(xgb_fold_config))
+        if xgb_config != None:
             seed_everything()
-            model = xgb.XGBClassifier(**xgb_fold_config)
+            model = xgb.XGBClassifier(**xgb_config)
         else:
             seed_everything()
             model = xgb.XGBClassifier()
@@ -236,65 +218,65 @@ def train_xgb(data,n_folds,target,xgb_config_path = None):
         fold_auprc.append(average_precision_score(y_test,test_score))
     return all_true,all_pred,fold_auroc,fold_auprc
 
-def train_MLP(data,n_folds,target,mlp_config_path = None):
-    target_data = data.loc[target,:]
-    target_data['label'] = 1
-    data = data.drop(target)
-    skf = StratifiedKFold(n_splits = n_folds, shuffle = True,random_state = 123)
-    all_pred,all_true, fold_auroc, fold_auprc= list(),list(),list(),list()
-    for i, (train_index, test_index) in enumerate(skf.split(data.iloc[:,:-1], data.iloc[:,-1])):
-        target_fold = target_data.copy()
-        train_data = data.iloc[train_index,:]
-        test_data = data.iloc[test_index,:]
-        train_data = pd.concat([train_data,target_fold])
-        train_data = move2last(train_data,'label')
-        ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+def train_MLP(data_path,feature_name):
+    all_pred,all_true,fold_auroc,fold_auprc= list(),list(),list(),list()
+    for i in range(5):
+        mlp_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_Mitomics_MLP_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+        if feature_name != 'All':
+            train_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_train_by_source.csv',index_col = 0)
+            test_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_test_by_source.csv',index_col = 0)
+        else:
+            train_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            train_data = train_data.drop(['Target'],axis = 1)
+            test_data = test_data.drop(['Target'],axis = 1)
         X_train,y_train = train_data.iloc[:,:-1],train_data.iloc[:,-1]
-        X_train, y_train = ros.fit_resample(X_train, y_train)
         X_train = torch.tensor(np.array(X_train),dtype = torch.float32)
         y_train = torch.tensor(np.array(y_train),dtype = torch.float32).unsqueeze(1)
         X_test = torch.tensor(np.array(test_data.iloc[:,:-1]),dtype = torch.float32)
         y_test = np.array(test_data.iloc[:,-1])
-        if mlp_config_path != None:
-            mlp_fold_config = mlp_config_path+str(i)+'_ratio_1.0_5fold.json'
-            mlp_fold_config = json.load(open(mlp_fold_config))
-            batch_size = mlp_fold_config['batch_size']
-            num_epoch = mlp_fold_config['num_epoch']
-            learning_rate = mlp_fold_config['learning_rate']
-            hidden_size = mlp_fold_config['hidden_size']
-            num_layer = mlp_fold_config['num_layer']
-            activation_type = mlp_fold_config['activation']
-            if num_layer == 1:
-                if activation_type == 'sigmoid':
-                    seed_everything()
-                    model = MLP_1_sigmoid(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                elif activation_type == 'relu':
-                    seed_everything()
-                    model = MLP_1_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-            elif num_layer == 2:
-                if activation_type == 'sigmoid':
-                    seed_everything()
-                    model = MLP_2_sigmoid(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                elif activation_type == 'relu':
-                    seed_everything()
-                    model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-            # n_pos = y_train.sum().item()
-            # n_neg = y_train.numel() - n_pos
-            # pos_w = torch.tensor([n_neg / n_pos])
-            criterion = nn.BCEWithLogitsLoss()
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+        train_dataset = CustomDataset(X_train,y_train)
+        if mlp_config != None:
+                batch_size = mlp_config['batch_size']
+                num_epoch = mlp_config['num_epoch']
+                learning_rate = mlp_config['learning_rate']
+                hidden_size = mlp_config['hidden_size']
+                num_layer = mlp_config['num_layer']
+                activation_type = mlp_config['activation']
+                if num_layer == 1:
+                    if activation_type == 'sigmoid':
+                        seed_everything()
+                        model = MLP_1_sigmoid(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
+                    elif activation_type == 'relu':
+                        seed_everything()
+                        model = MLP_1_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
+                elif num_layer == 2:
+                    if activation_type == 'sigmoid':
+                        seed_everything()
+                        model = MLP_2_sigmoid(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
+                    elif activation_type == 'relu':
+                        seed_everything()
+                        model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
+                # n_pos = y_train.sum().item()
+                # n_neg = y_train.numel() - n_pos
+                # eps = 1e-8
+                # pos_w = torch.tensor([n_neg / (n_pos+eps)])
+                criterion = nn.BCEWithLogitsLoss() 
+                optimizer = optim.Adam(model.parameters(), lr=learning_rate)
         else:
             seed_everything()
-            model = MLP_1_relu(X_train.shape[1],hidden_size=128,dropout_rate=0.5)
+            model = MLP_1_relu(X_train.shape[1],hidden_size=128,dropout_rate=0.3)
             # n_pos = y_train.sum().item()
             # n_neg = y_train.numel() - n_pos
-            # pos_w = torch.tensor([n_neg / n_pos])
+            # eps = 1e-8
+            # pos_w = torch.tensor([n_neg / (n_pos+eps)])
             criterion = nn.BCEWithLogitsLoss()
             optimizer = optim.Adam(model.parameters(), lr=1e-3)
         train_dataset = CustomDataset(X_train,y_train)
         seed_everything()
         train_loader = DataLoader(dataset = train_dataset,batch_size = batch_size,shuffle=True)
         for epoch in range(num_epoch):
+            model.train()
             for batch_feature,batch_label in train_loader:
                 # batch_feature, batch_label = batch_feature.to(device), batch_label.to(device)
                 optimizer.zero_grad()
@@ -311,9 +293,6 @@ def train_MLP(data,n_folds,target,mlp_config_path = None):
             fold_auroc.append(roc_auc_score(y_test,predictions))
             fold_auprc.append(average_precision_score(y_test,predictions))
     return all_true,all_pred,fold_auroc,fold_auprc
-
-
-
 
 
 def plot_ROC(per_true,per_pred,all_true,all_pred,model_name,data_name,save_path):
@@ -339,14 +318,45 @@ def plot_ROC(per_true,per_pred,all_true,all_pred,model_name,data_name,save_path)
     ax.set_xlabel("False positive rate")
     ax.set_ylabel("True positive rate")
     ax.set_title(model_name + "5_fold_ROC_"+data_name+".png")
-
     #plt.show()
     fig.savefig(save_path+model_name+"_ROC_"+data_name+".png")
 
+def plot_PRC(per_true,per_pred,all_true,all_pred,model_name,data_name,save_path):
+    fig, ax = plt.subplots()
+    n_folds = len(per_true)
+    for i in range(n_folds):
+        y_test = per_true[i]
+        y_score = per_pred[i]
+        precision, recall, thresholds = precision_recall_curve(y_test, y_score)
+        if n_folds < 8:
+            ax.plot(recall, precision, lw=1)
+        else:
+            ax.plot(recall,precision,lw=1)
+    mean_pre, mean_recall, mean_thresh = precision_recall_curve(all_true, all_pred)  # pooled data
+    ap = average_precision_score(all_true,all_pred)
+    ax.plot(mean_recall,mean_pre, color="b",lw=2,alpha=0.8,label=r"Pooled PRC (AP = %0.2f)" % (ap))
+    ax.legend(title=model_name, loc="lower right")
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_title(model_name + str(n_folds)+"_fold_PRC_"+data_name+".png")
+    #plt.show()
+    fig.savefig(save_path+model_name + "_PRC_"+data_name+".png")
+
+def plot_confusion_matrix(all_true,all_pred,model_name,data_name,save_path):
+    print(all_true)
+    print(all_pred)
+    cm = confusion_matrix(all_true, all_pred)
+    # Plot the confusion matrix
+    plt.figure(figsize=(10, 7))
+    sns.heatmap(cm, annot=True, fmt='g')  # 'g' format to avoid scientific notation
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title(model_name + "confusion_matrix "+data_name+".png")
+    plt.savefig(save_path+model_name+"confusion_matrix"+data_name+'.png')
 
 
 
-def plot_fimportance(importances,std,feature_names,data_name,save_path):
+def plot_importance(importances,std,feature_names,data_name,save_path):
     fig2,ax2 = plt.subplots()
     fig2.set_size_inches(30,8)
     forest_importances =pd.Series(importances,index = feature_names)
@@ -420,36 +430,39 @@ def normalize_features(feature_df,cols_to_normalize):
     return feature_df
 
 
-
-
-def calc_Comparison_Metrics(feature_path_list,feature_list,n_fold,save_path,data_name,target,phenotype,
-                            lr_config = None,rf_config=None,xgb_config = None,mlp_config = None):
+def calc_Comparison_Metrics(feature_path,feature_list,feature_group,save_path,data_name,phenotype):
     model_list = ['Logistic Regression','Random Forest','XGBoost','MLP']
-    # model_list = ['MLP_2']
+    # model_list = ['Logistic Regression']
+    pool_auc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
+    mean_auc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
+    sem_auc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
+    pool_prc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
+    mean_prc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
+    sem_prc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
+    # model_list = ['MLP']
+    # Order of path list should be the same as feature list.
     for j in range(len(model_list)):
-        pool_auc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
-        mean_auc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
-        sem_auc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
-        pool_prc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
-        mean_prc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
-        sem_prc_df = pd.DataFrame(columns=feature_list,index=[phenotype])
         model_name = model_list[j]
         print(model_name)
-        for i in range(len(feature_path_list)):
-            feature_path = feature_path_list[i]
+        fig,ax = plt.subplots()
+        for i in range(len(feature_list)):
             feature = feature_list[i]
-            feature_data = pd.read_csv(feature_path,index_col='protein')
+            feature_name = feature_group[i]
             if model_name == 'Logistic Regression':
-                all_true,all_pred,fold_auroc,fold_auprc= train_lr(data = feature_data,n_folds = n_fold,target = target,lr_config_path = lr_config)
+                all_true,all_pred,fold_auroc,fold_auprc = train_lr(data_path = feature_path,feature_name = feature_name)
             elif model_name == 'Random Forest':
-                all_true,all_pred,fold_auroc,fold_auprc = train_rf(data = feature_data,n_folds = n_fold,target = target,rf_config_path = rf_config)
+                all_true,all_pred,fold_auroc,fold_auprc = train_rf(data_path = feature_path,feature_name = feature_name)
             elif model_name == 'XGBoost':
-                all_true,all_pred,fold_auroc,fold_auprc = train_xgb(data = feature_data,n_folds = n_fold,target = target,xgb_config_path = xgb_config)
+                all_true,all_pred,fold_auroc,fold_auprc = train_xgb(data_path = feature_path,feature_name = feature_name)
             elif model_name == 'MLP':
-                all_true,all_pred,fold_auroc,fold_auprc = train_MLP(data = feature_data,n_folds = n_fold,target = target,mlp_config_path = mlp_config)
+                all_true,all_pred,fold_auroc,fold_auprc = train_MLP(data_path = feature_path,feature_name = feature_name)
+
             pool_fpr, pool_tpr, _ = roc_curve(all_true,all_pred) # pooled data
             pool_auc = auc(pool_fpr, pool_tpr)
+            ax.plot(pool_fpr,pool_tpr,label="%s (AUC = %0.2f)" % (feature,pool_auc),lw=2,alpha=1)
             pool_auc_df.loc[phenotype,feature] = pool_auc
+            # print(fold_auroc)
+            # print(statistics.mean(fold_auroc))
             mean_auc_df.loc[phenotype,feature] = statistics.mean(fold_auroc)
             std_dev_auroc = statistics.stdev(fold_auroc)
             sem_auroc = std_dev_auroc / math.sqrt(len(fold_auroc))
@@ -460,32 +473,44 @@ def calc_Comparison_Metrics(feature_path_list,feature_list,n_fold,save_path,data
             std_dev_auprc = statistics.stdev(fold_auprc)
             sem_auprc = std_dev_auprc / math.sqrt(len(fold_auprc))
             sem_prc_df.loc[phenotype,feature] = sem_auprc
+        ax.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.7)
+        ax.legend(title=model_name, loc="lower right")
+        ax.set_xlabel("False positive rate")
+        ax.set_ylabel("True positive rate")
+        fig.savefig(save_path+ model_name+"_ROC_"+data_name+".png",dpi = 400)
         pool_auc_df.to_csv(save_path+model_name+'_'+data_name+'pool_auc_df.csv')
         mean_auc_df.to_csv(save_path+model_name+'_'+data_name+'mean_auc_df.csv')
         sem_auc_df.to_csv(save_path+model_name+'_'+data_name+'sem_auc_df.csv')
         pool_prc_df.to_csv(save_path+model_name+'_'+data_name+'pool_prc_df.csv')
         mean_prc_df.to_csv(save_path+model_name+'_'+data_name+'mean_prc_df.csv')
         sem_prc_df.to_csv(save_path+model_name+'_'+data_name+'sem_prc_df.csv')
+    
 if __name__=='__main__':
-    DATA_DIREC = '../Data/'
-    PLOT_DIREC = '../Plot/'
-    feature_list = ['Abundance','Subcell','Source_Target_Relation','GO','All']
-    feature_path_list = [DATA_DIREC+'LDLR/split_feature_group/abundance_feature_LDLR.csv',
-                        DATA_DIREC+'LDLR/split_feature_group/localization_feature_LDLR.csv',
-                        DATA_DIREC+'LDLR/split_feature_group/ppi_feature_LDLR.csv',
-                        DATA_DIREC+'LDLR/split_feature_group/go_feature_LDLR.csv',
-                        DATA_DIREC+'LDLR/train_node_attribute_LDLR_with_target_feature.csv'
-                        ]
-    calc_Comparison_Metrics(feature_path_list,feature_list,n_fold=5,
-                        save_path = PLOT_DIREC+'LDLR/',
-                        data_name = 'Feature_group_comparison_LDLR_',
-                        phenotype = 'LDLR',
-                        target=list(np.load(DATA_DIREC+'targets/LDLR_target.npy')),
-                        lr_config = DATA_DIREC+'config/LDLR/best_paras_LDLR_LogisticRegression_subset_False_fold_',
-                        rf_config = DATA_DIREC+'config/LDLR/best_paras_LDLR_RandomForest_subset_False_fold_',
-                        xgb_config = DATA_DIREC+'config/LDLR/best_paras_LDLR_XGBoost_subset_False_fold_',
-                        mlp_config = DATA_DIREC+'config/LDLR/best_paras_LDLR_MLP_subset_False_fold_'
+    DATA_DIREC = '../../Data/'
+    PLOT_DIREC = '../../Plot/'
+    feature_list =['Source','Target','Source_Target_Relation','All']
+    feature_group = ['source_feature','target_feature','ppi_feature','All']
+    
+    feature_path=  DATA_DIREC+'Mitomics/split_subgraph/'
+
+
+    calc_Comparison_Metrics(feature_path,feature_list,feature_group,
+                        save_path = PLOT_DIREC+'/Mitomics/',
+                        data_name = 'Subgraph_feature_comparison_Mitomics_',
+                        phenotype = 'Mitomics'
                         )
+    
+
+    feature_list = ['Abundance','Subcell','Source_Target_Relation','GO','All']
+    feature_group = ['abundance_feature','localization_feature','ppi_feature','go_feature','All']
+    
+    feature_path=  DATA_DIREC+'Mitomics/split_feature_group/'
 
 
-   
+    calc_Comparison_Metrics(feature_path,feature_list,feature_group,
+                        save_path = PLOT_DIREC+'Mitomics/',
+                        data_name = 'Feature_group_comparison_Mitomics_',
+                        phenotype = 'Mitomics'
+                        )
+    
+    

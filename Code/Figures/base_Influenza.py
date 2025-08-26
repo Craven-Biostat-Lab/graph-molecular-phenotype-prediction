@@ -21,7 +21,7 @@ from torch.utils.data import Dataset,DataLoader
 warnings.filterwarnings('ignore')
 
 ##
-DATA_DIREC = '../Datasets/'
+DATA_DIREC = '../../Datasets/'
 
 def seed_everything(seed=123):
     """"
@@ -641,26 +641,24 @@ def plot_learning_curve(data,n_folds,save_path,data_name,shortest_path_len_file,
         fig2.savefig(save_path+'Baseline_Comparison_ROC_'+data_name+'.png',dpi = 800)
 
 
-
-
 if __name__=='__main__':
-    DATA_DIREC = '../Data/'
-    PLOT_DIREC = '../Plot/'
-    plot_learning_curve(data = DATA_DIREC+'train_node_attribute_SREBP2_with_target_feature.csv',
+    DATA_DIREC = '../../Data/'
+    PLOT_DIREC = '../../Plot/'
+    plot_learning_curve(data = DATA_DIREC+'Influenza/train_node_attribute_Influenza_with_target_feature.csv',
                     n_folds = 5,
-                    save_path = PLOT_DIREC+'SREBP2/',
-                    shortest_path_len_file = DATA_DIREC+'SREBP2/shortest_path_length_data.csv',
-                    data_name = 'SREBP2',
-                    target = list(np.load(DATA_DIREC+'targets/SREBP2_target.npy')),
+                    save_path = PLOT_DIREC+'Influenza/',
+                    shortest_path_len_file = DATA_DIREC+'Influenza/shortest_path_length_data.csv',
+                    data_name = 'Influenza',
+                    target = list(np.load(DATA_DIREC+'targets/Influenza_target.npy')),
                     rw_positive_state = [10],
                     rwr_positive_state = [0.6],
                     heat_positive_state = [0.1],
-                    rw_target_state = [10],
-                    rwr_target_state = [0.6],
+                    rw_target_state = [30],
+                    rwr_target_state = [0.2],
                     heat_target_state = [0.1],
                     start_ratio = 1,
                     save_fig1 = True,
                     save_fig2 = True,
-                    phenotype = 'SREBP2',
-                    plot_title = 'Cholesterol homeostasis'
+                    phenotype = 'Influenza',
+                    plot_title = 'Influenza A virus replication'
                     )

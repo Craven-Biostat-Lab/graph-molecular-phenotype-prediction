@@ -19,8 +19,9 @@ import torch.nn as nn
 from torch.utils.data import Dataset,DataLoader
 warnings.filterwarnings('ignore')
 
-DATA_DIREC = '../Data/'
-PLOT_DIREC = '../Plot/'
+DATA_DIREC = '../../Data/'
+PLOT_DIREC = '../../Plot/'
+
 
 def seed_everything(seed=123):
     """"
@@ -117,10 +118,10 @@ def train_rf(data,n_folds,target,rf_config_path = None):
     return all_true,all_pred
 
 def main():
-    phenotype = 'SREBP2'
+    phenotype = 'LDLR'
     data1 = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_'+phenotype+'_with_target_feature.csv',index_col = 0)
-    target = list(np.load(DATA_DIREC+phenotype+'_target.npy'))
-    true_1,pred_1 = train_rf(data1,n_folds=5,target=target,rf_config_path =DATA_DIREC+'config/'+phenotype+'/best_paras_'+phenotype+'_RandomForest_subset_False_')
+    target = list(np.load(DATA_DIREC+'targets/'+phenotype+'_target.npy'))
+    true_1,pred_1 = train_rf(data1,n_folds=5,target=target,rf_config_path = DATA_DIREC+'config/'+phenotype+'/best_paras_'+phenotype+'_RandomForest_subset_False_')
     fpr_1, tpr_1, _ = roc_curve(true_1, pred_1)
     auc_1 = auc(fpr_1,tpr_1)
     data2 = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_'+phenotype+'_with_target_feature.csv',index_col = 0)
@@ -143,8 +144,8 @@ def main():
     ax.set_ylabel("True positive rate",fontsize = 14)
     ax.tick_params(axis='y', labelsize=14)
     ax.tick_params(axis='x', labelsize=14)
-    ax.set_title('Cholesterol homeostasis',fontsize = 18)
-    fig.savefig(PLOT_DIREC+''+phenotype+'/FigureS1_ROC_Curves.png',dpi = 800)
+    ax.set_title('Cholesterol uptake',fontsize = 18)
+    fig.savefig(PLOT_DIREC+phenotype+'/FigureS1_ROC_Curves.png',dpi = 800)
 
 if __name__=='__main__':
     main()

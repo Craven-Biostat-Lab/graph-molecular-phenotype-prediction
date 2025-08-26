@@ -125,8 +125,8 @@ class CustomDataset(Dataset):
 
 
 ##
-DATA_DIREC = '../Data/'
-PLOT_DIREC = '../Plot/'
+DATA_DIREC = '../../Data/'
+PLOT_DIREC = '../../Plot/'
 
 ## ST-relation features only
 phenotype = 'SREBP2'

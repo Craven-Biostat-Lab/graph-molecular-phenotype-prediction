@@ -467,24 +467,25 @@ def calc_Comparison_Metrics(feature_path_list,feature_list,n_fold,save_path,data
         mean_prc_df.to_csv(save_path+model_name+'_'+data_name+'mean_prc_df.csv')
         sem_prc_df.to_csv(save_path+model_name+'_'+data_name+'sem_prc_df.csv')
 if __name__=='__main__':
-    DATA_DIREC = '../Data/'
-    PLOT_DIREC = '../Plot/'
-    feature_list = ['Abundance','Subcell','Source_Target_Relation','GO','All']
-    feature_path_list = [DATA_DIREC+'SREBP2/split_feature_group/abundance_feature_SREBP2.csv',
-                         DATA_DIREC+'SREBP2/split_feature_group/localization_feature_SREBP2.csv',
-                        DATA_DIREC+'SREBP2/split_feature_group/ppi_feature_SREBP2.csv',
-                        DATA_DIREC+'SREBP2/split_feature_group/go_feature_SREBP2.csv',
-                        DATA_DIREC+'train_node_attribute_SREBP2_with_target_feature.csv'
-                        ]
+    DATA_DIREC = '../../Data/'
+    PLOT_DIREC = '../../Plot/'
+    feature_list = ['Source','Target','Source_Target_Relation','All']
+    feature_path_list = [DATA_DIREC+'Influenza/split_subgraph/source_feature_Influenza.csv',
+                        DATA_DIREC+'Influenza/split_subgraph/target_feature_Influenza.csv',
+                        DATA_DIREC+'Influenza/split_subgraph/ppi_feature_Influenza.csv',
+                        DATA_DIREC+'Influenza/train_node_attribute_Influenza_with_target_feature.csv']
     calc_Comparison_Metrics(feature_path_list,feature_list,n_fold=5,
-                        save_path = PLOT_DIREC+'SREBP2/',
-                        data_name = 'Feature_group_comparison_SREBP2_',
-                        target=list(np.load(DATA_DIREC+'targets/SREBP2_target.npy')),
-                        phenotype = 'SREBP2',
-                        lr_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_LogisticRegression_subset_False_fold_',
-                        rf_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_RandomForest_subset_False_fold_',
-                        xgb_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_XGBoost_subset_False_fold_',
-                        mlp_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_MLP_subset_False_fold_'
+                        save_path = PLOT_DIREC+'Influenza/',
+                        data_name = 'Subgraph_feature_comparison_Influenza_',
+                        phenotype = 'Influenza',
+                        target=list(np.load(DATA_DIREC+'targets/Influenza_target.npy')),
+                        lr_config = DATA_DIREC+'config/Influenza/best_paras_Influenza_LogisticRegression_subset_False_fold_',
+                        rf_config = DATA_DIREC+'config/Influenza/best_paras_Influenza_RandomForest_subset_False_fold_',
+                        xgb_config = DATA_DIREC+'config/Influenza/best_paras_Influenza_XGBoost_subset_False_fold_',
+                        mlp_config = DATA_DIREC+'config/Influenza/best_paras_Influenza_MLP_subset_False_fold_'
                         )
+
+
+
 
    
