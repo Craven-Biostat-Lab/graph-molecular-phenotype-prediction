@@ -1,0 +1,13 @@
+universe = vanilla
+
+end_expr = $(start) + 1000
+end = $INT(end_expr)
+
+executable = /s/bin/python3
+arguments = compute_jaccard_subset_topk.py ../gene2go_all.pkl $(start) $(end) 5 jaccard_$(start)_$(end).csv
+
+request_cpus = 1
+request_memory = 8GB
+request_disk = 2GB
+
+queue start from seq 0 1000 67000 |
