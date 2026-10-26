@@ -1,10 +1,7 @@
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
-from sklearn.svm import SVC
-from sklearn.model_selection import StratifiedKFold
 import pandas as pd
-from imblearn.over_sampling import RandomOverSampler
 from sklearn.metrics import roc_curve, auc
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +9,8 @@ import json
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset,DataLoader
+import sys
+sys.path.insert(0, '../Dataset')  # merge_feature.py lives in Code/Dataset
 import merge_feature as mf
 import argparse
 from sklearn.utils.class_weight import compute_class_weight
@@ -23,7 +22,9 @@ import os
 import warnings
 warnings.filterwarnings('ignore')
 
-DATA_DIREC = '../../Data/'
+plt.rcParams["font.family"] = "Arial"
+
+# DATA_DIREC = '../../Data/'
 PLOT_DIREC = '../../Plot/'
 
 def seed_everything(seed=123):
@@ -134,23 +135,42 @@ def cosine_similarity(vec_a,vec_b):
     similarity = dot_product / (magnitude_a * magnitude_b)
     return similarity
 
+PREC_KS = [20, 100]
+
+def precision_at_k(labels, scores, k):
+    # fraction of true positives among the top-k highest-scored instances.
+    # Instances tied with the k-th score share the remaining slots in proportion
+    # (the average over every way of breaking the tie), so the result does not
+    # depend on row order.
+    labels = np.asarray(labels, dtype=float)
+    scores = np.asarray(scores, dtype=float)
+    k = min(k, len(scores))
+    kth_score = np.sort(scores)[::-1][k - 1]
+    above = scores > kth_score
+    tied = scores == kth_score
+    n_left = k - above.sum()  # top-k slots left for the tied group
+    return (labels[above].sum() + n_left * labels[tied].mean()) / k
+
 def train_lg():
-    all_sources = pd.read_csv(DATA_DIREC +'Mitomics/train_node_attribute_Mitomics_with_target_feature.csv')['protein'].unique().tolist()
+    all_sources = pd.read_csv('../../Data/Mitomics/train_node_attribute_Mitomics_with_target_feature.csv')['protein'].unique().tolist()
     pool_aucs = list()
     pool_fpr = list()
     pool_tpr = list()
+    pool_prec = {k: [] for k in PREC_KS}
     for ratio in range(1,11):
+        pool_prediction = list()
+        pool_truelabel = list()
+        pool_index = list()  # instance id for each pooled prediction
+        pool_fold = list()   # fold that each instance was tested in
         for i in range(5):
-            pool_prediction = list()
-            pool_truelabel = list()
-            train_raw_data = pd.read_csv(DATA_DIREC +'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
-            test_source = np.load(DATA_DIREC +'Mitomics/fold_'+str(i)+'_test_protein.npy')
-            train_source = list(set(all_sources)-set(test_source))
+            train_raw_data = pd.read_csv('../../Data/Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_source = np.load('../../Data/Mitomics/fold_'+str(i)+'_test_protein.npy')
+            train_source = sorted(set(all_sources)-set(test_source))  # fixed order so random.sample is reproducible
             train_raw_data = train_raw_data.drop(['Target'],axis = 1)
-            test_data = pd.read_csv(DATA_DIREC +'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv('../../Data/Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
             test_data = test_data.drop(['Target'],axis = 1)
             r = ratio/10
-            lr_config = json.load(open(DATA_DIREC +'config/Mitomics/best_paras_mitomics_LogisticRegression_fold_'+str(i)+'_ratio_'+str(r)+'_5fold.json'))
+            lr_config = json.load(open('../../config/Mitomics/best_paras_Mitomics_LogisticRegression_fold_'+str(i)+'_ratio_'+str(r)+'_5fold.json'))
             if r != 1.0:
                 sample_size = max(1,int(len(train_source)*r))
                 random.seed(123)
@@ -178,31 +198,40 @@ def train_lg():
             test_score = model.predict_proba(X_test)[:, 1]
             pool_prediction.extend(test_score)
             pool_truelabel.extend(y_test)
+            pool_index.extend(test_data.index.tolist())
+            pool_fold.extend([i] * len(y_test))
         fpr,tpr,_ = roc_curve(pool_truelabel,pool_prediction)
         pool_auroc = auc(fpr,tpr)
         pool_aucs.append(pool_auroc)
+        for k in PREC_KS:
+            pool_prec[k].append(precision_at_k(pool_truelabel, pool_prediction, k))
+        # pooled predictions for this ratio; the final ratio (1.0) overwrites and is returned
+        pool_pred_df = pd.DataFrame({'prediction': pool_prediction, 'label': pool_truelabel, 'fold': pool_fold}, index=pool_index)
         if ratio == 10:
             pool_fpr.extend(fpr)
-            pool_tpr.extend(tpr)      
-    return pool_aucs,pool_fpr,pool_tpr
+            pool_tpr.extend(tpr)
+    return pool_aucs,pool_fpr,pool_tpr,pool_pred_df,pool_prec
 
 def train_rf():
-    all_sources = pd.read_csv(DATA_DIREC +'Mitomics/train_node_attribute_Mitomics_with_target_feature.csv')['protein'].unique().tolist()
+    all_sources = pd.read_csv('../../Data/Mitomics/train_node_attribute_Mitomics_with_target_feature.csv')['protein'].unique().tolist()
     pool_aucs = list()
     pool_fpr = list()
     pool_tpr = list()
+    pool_prec = {k: [] for k in PREC_KS}
     for ratio in range(1,11):
+        pool_prediction = list()
+        pool_truelabel = list()
+        pool_index = list()  # instance id for each pooled prediction
+        pool_fold = list()   # fold that each instance was tested in
         for i in range(5):
-            pool_prediction = list()
-            pool_truelabel = list()
-            train_raw_data = pd.read_csv(DATA_DIREC +'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
-            test_source = np.load(DATA_DIREC +'Mitomics/fold_'+str(i)+'_test_protein.npy')
-            train_source = list(set(all_sources)-set(test_source))
+            train_raw_data = pd.read_csv('../../Data/Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_source = np.load('../../Data/Mitomics/fold_'+str(i)+'_test_protein.npy')
+            train_source = sorted(set(all_sources)-set(test_source))  # fixed order so random.sample is reproducible
             train_raw_data = train_raw_data.drop(['Target'],axis = 1)
-            test_data = pd.read_csv(DATA_DIREC +'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv('../../Data/Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
             test_data = test_data.drop(['Target'],axis = 1)
             r = ratio/10
-            rf_config = json.load(open(DATA_DIREC +'config/Mitomics/best_paras_mitomics_RandomForest_fold_'+str(i)+'_ratio_'+str(r)+'_5fold.json'))
+            rf_config = json.load(open('../../config/Mitomics/best_paras_Mitomics_RandomForest_fold_'+str(i)+'_ratio_'+str(r)+'_5fold.json'))
             if r != 1.0:
                 sample_size = max(1,int(len(train_source)*r))
                 random.seed(123)
@@ -225,31 +254,40 @@ def train_rf():
             test_score = model.predict_proba(X_test)[:, 1]
             pool_prediction.extend(test_score)
             pool_truelabel.extend(y_test)
+            pool_index.extend(test_data.index.tolist())
+            pool_fold.extend([i] * len(y_test))
         fpr,tpr,_ = roc_curve(pool_truelabel,pool_prediction)
         pool_auroc = auc(fpr,tpr)
         pool_aucs.append(pool_auroc)
+        for k in PREC_KS:
+            pool_prec[k].append(precision_at_k(pool_truelabel, pool_prediction, k))
+        # pooled predictions for this ratio; the final ratio (1.0) overwrites and is returned
+        pool_pred_df = pd.DataFrame({'prediction': pool_prediction, 'label': pool_truelabel, 'fold': pool_fold}, index=pool_index)
         if ratio == 10:
             pool_fpr.extend(fpr)
-            pool_tpr.extend(tpr)      
-    return pool_aucs,pool_fpr,pool_tpr
+            pool_tpr.extend(tpr)
+    return pool_aucs,pool_fpr,pool_tpr,pool_pred_df,pool_prec
 
 def train_xgb():
-    all_sources = pd.read_csv(DATA_DIREC +'/train_node_attribute_Mitomics_with_target_feature.csv')['protein'].unique().tolist()
+    all_sources = pd.read_csv('../../Data/Mitomics/train_node_attribute_Mitomics_with_target_feature.csv')['protein'].unique().tolist()
     pool_aucs = list()
     pool_fpr = list()
     pool_tpr = list()
+    pool_prec = {k: [] for k in PREC_KS}
     for ratio in range(1,11):
+        pool_prediction = list()
+        pool_truelabel = list()
+        pool_index = list()  # instance id for each pooled prediction
+        pool_fold = list()   # fold that each instance was tested in
         for i in range(5):
-            pool_prediction = list()
-            pool_truelabel = list()
-            train_raw_data = pd.read_csv(DATA_DIREC +'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
-            test_source = np.load(DATA_DIREC +'Mitomics/fold_'+str(i)+'_test_protein.npy')
-            train_source = list(set(all_sources)-set(test_source))
+            train_raw_data = pd.read_csv('../../Data/Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_source = np.load('../../Data/Mitomics/fold_'+str(i)+'_test_protein.npy')
+            train_source = sorted(set(all_sources)-set(test_source))  # fixed order so random.sample is reproducible
             train_raw_data = train_raw_data.drop(['Target'],axis = 1)
-            test_data = pd.read_csv(DATA_DIREC +'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv('../../Data/Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
             test_data = test_data.drop(['Target'],axis = 1)
             r = ratio/10
-            xgb_config = json.load(open(DATA_DIREC +'config/Mitomics/best_paras_mitomics_XGBoost_fold_'+str(i)+'_ratio_'+str(r)+'_5fold.json'))
+            xgb_config = json.load(open('../../config/Mitomics/best_paras_Mitomics_XGBoost_fold_'+str(i)+'_ratio_'+str(r)+'_5fold.json'))
             if r != 1.0:
                 sample_size = max(1,int(len(train_source)*r))
                 random.seed(123)
@@ -271,35 +309,43 @@ def train_xgb():
                 model = xgb.XGBClassifier()
             model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
             print("Fold " + str(i + 1)+' training ratio '+ str(r))
-            model.fit(X_train, y_train)
             test_score = model.predict_proba(X_test)[:, 1]
             pool_prediction.extend(test_score)
             pool_truelabel.extend(y_test)
+            pool_index.extend(test_data.index.tolist())
+            pool_fold.extend([i] * len(y_test))
         fpr,tpr,_ = roc_curve(pool_truelabel,pool_prediction)
         pool_auroc = auc(fpr,tpr)
         pool_aucs.append(pool_auroc)
+        for k in PREC_KS:
+            pool_prec[k].append(precision_at_k(pool_truelabel, pool_prediction, k))
+        # pooled predictions for this ratio; the final ratio (1.0) overwrites and is returned
+        pool_pred_df = pd.DataFrame({'prediction': pool_prediction, 'label': pool_truelabel, 'fold': pool_fold}, index=pool_index)
         if ratio == 10:
             pool_fpr.extend(fpr)
-            pool_tpr.extend(tpr)      
-    return pool_aucs,pool_fpr,pool_tpr
+            pool_tpr.extend(tpr)
+    return pool_aucs,pool_fpr,pool_tpr,pool_pred_df,pool_prec
 
 def train_MLP():
-    all_sources = pd.read_csv(DATA_DIREC +'Mitomics/train_node_attribute_Mitomics_with_target_feature.csv')['protein'].unique().tolist()
+    all_sources = pd.read_csv('../../Data/Mitomics/train_node_attribute_Mitomics_with_target_feature.csv')['protein'].unique().tolist()
     pool_aucs = list()
     pool_fpr = list()
     pool_tpr = list()
+    pool_prec = {k: [] for k in PREC_KS}
     for ratio in range(1,11):
+        pool_prediction = list()
+        pool_truelabel = list()
+        pool_index = list()  # instance id for each pooled prediction
+        pool_fold = list()   # fold that each instance was tested in
         for i in range(5):
-            pool_prediction = list()
-            pool_truelabel = list()
-            train_raw_data = pd.read_csv(DATA_DIREC +'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
-            test_source = np.load(DATA_DIREC +'Mitomics/fold_'+str(i)+'_test_protein.npy')
-            train_source = list(set(all_sources)-set(test_source))
+            train_raw_data = pd.read_csv('../../Data/Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_source = np.load('../../Data/Mitomics/fold_'+str(i)+'_test_protein.npy')
+            train_source = sorted(set(all_sources)-set(test_source))  # fixed order so random.sample is reproducible
             train_raw_data = train_raw_data.drop(['Target'],axis = 1)
-            test_data = pd.read_csv(DATA_DIREC +'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv('../../Data/Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
             test_data = test_data.drop(['Target'],axis = 1)
             r = ratio/10
-            mlp_config = json.load(open(DATA_DIREC +'config/Mitomics/best_paras_Mitomics_MLP_fold_'+str(i)+'_ratio_'+str(r)+'_5fold.json'))
+            mlp_config = json.load(open('../../config/Mitomics/best_paras_Mitomics_MLP_fold_'+str(i)+'_ratio_'+str(r)+'_5fold.json'))
             if r != 1.0:
                 sample_size = max(1,int(len(train_source)*r))
                 random.seed(123)
@@ -336,17 +382,11 @@ def train_MLP():
                     elif activation_type == 'relu':
                         seed_everything()
                         model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-                # n_pos = y_train.sum().item()
-                # n_neg = y_train.numel() - n_pos
-                # pos_w = torch.tensor([n_neg / n_pos])
                 criterion = nn.BCEWithLogitsLoss()
                 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
             else:
                 seed_everything()
                 model = MLP_1_relu(X_train.shape[1],hidden_size=128,dropout_rate=0.3)
-                # n_pos = y_train.sum().item()
-                # n_neg = y_train.numel() - n_pos
-                # pos_w = torch.tensor([n_neg / n_pos])
                 criterion = nn.BCEWithLogitsLoss()
                 optimizer = optim.Adam(model.parameters(), lr=1e-3)
             train_dataset = CustomDataset(X_train,y_train)
@@ -368,13 +408,19 @@ def train_MLP():
                 # predictions = model(X_test).view(-1).tolist()
                 pool_prediction.extend(predictions)
                 pool_truelabel.extend(y_test)
+                pool_index.extend(test_data.index.tolist())
+                pool_fold.extend([i] * len(y_test))
         fpr,tpr,_ = roc_curve(pool_truelabel,pool_prediction)
         pool_auroc = auc(fpr,tpr)
         pool_aucs.append(pool_auroc)
+        for k in PREC_KS:
+            pool_prec[k].append(precision_at_k(pool_truelabel, pool_prediction, k))
+        # pooled predictions for this ratio; the final ratio (1.0) overwrites and is returned
+        pool_pred_df = pd.DataFrame({'prediction': pool_prediction, 'label': pool_truelabel, 'fold': pool_fold}, index=pool_index)
         if ratio == 10:
             pool_fpr.extend(fpr)
-            pool_tpr.extend(tpr)      
-    return pool_aucs,pool_fpr,pool_tpr
+            pool_tpr.extend(tpr)
+    return pool_aucs,pool_fpr,pool_tpr,pool_pred_df,pool_prec
 
 
 def plot_positive_diffusion(score_path):
@@ -384,6 +430,7 @@ def plot_positive_diffusion(score_path):
     cols = score.columns
     print(cols)
     roc_score = list()
+    prec_score = {k: [] for k in PREC_KS}
     cols = cols.drop('label')
     for j in cols:
         scores = score[j]
@@ -391,7 +438,9 @@ def plot_positive_diffusion(score_path):
         fpr, tpr, thresholds = roc_curve(labels, scores)
         roc_auc = auc(fpr, tpr)
         roc_score.append(roc_auc)
-    return roc_score
+        for k in PREC_KS:
+            prec_score[k].append(precision_at_k(labels, scores, k))
+    return roc_score, prec_score
 
 
 def plot_target_diffusion(score_path,kernel,state):
@@ -400,93 +449,187 @@ def plot_target_diffusion(score_path,kernel,state):
     label = target_score['label'].tolist()
     fpr,tpr,_ = roc_curve(label,score)
     auroc = auc(fpr,tpr)
-    return auroc
+    prec = {k: precision_at_k(label, score, k) for k in PREC_KS}
+    return auroc, prec
 
 
 def plot_learning_curve():
     ## This function is used for generating AUROC/AUPRC/Loss for 
-    fig1, ax1 = plt.subplots()
-    fig2, ax2 = plt.subplots()
-    
+    fig1, ax1 = plt.subplots(figsize = (8,6))
+    fig2, ax2 = plt.subplots(figsize = (8,6))
+    fig3, ax3 = plt.subplots(figsize = (8,6))  # Precision@20 learning curve
+    fig4, ax4 = plt.subplots(figsize = (8,6))  # Precision@100 learning curve
+
     ratio_list = [i/10 for i in range(1,11)]
-    lr_pool_auroc,lr_pool_fpr,lr_pool_tpr = train_lg()
+    lr_pool_auroc,lr_pool_fpr,lr_pool_tpr,lr_pred_df,lr_prec = train_lg()
+    lr_pred_df.to_csv(PLOT_DIREC+'Mitomics/pooled_predictions_LogisticRegression_Mitomics_with_target.csv')
     ax1.plot(ratio_list,lr_pool_auroc,linestyle = '-',label = 'Logistic regression',lw = 3, alpha = 1)
+    ax3.plot(ratio_list,lr_prec[20],linestyle = '-',label = 'Logistic regression',lw = 3, alpha = 1)
+    ax4.plot(ratio_list,lr_prec[100],linestyle = '-',label = 'Logistic regression',lw = 3, alpha = 1)
     auroc = auc(lr_pool_fpr,lr_pool_tpr)
     ax2.plot(lr_pool_fpr,lr_pool_tpr,linestyle = '-',label = r"Logistic regression (AUROC = %0.2f )" % (auroc),lw = 2, alpha = 1)
 
-    rf_pool_auroc,rf_pool_fpr,rf_pool_tpr = train_rf()
+    rf_pool_auroc,rf_pool_fpr,rf_pool_tpr,rf_pred_df,rf_prec = train_rf()
+    rf_pred_df.to_csv(PLOT_DIREC+'Mitomics/pooled_predictions_RandomForest_Mitomics_with_target.csv')
     ax1.plot(ratio_list,rf_pool_auroc,linestyle = '-',label = 'Random forest',lw = 3, alpha = 1)
+    ax3.plot(ratio_list,rf_prec[20],linestyle = '-',label = 'Random forest',lw = 3, alpha = 1)
+    ax4.plot(ratio_list,rf_prec[100],linestyle = '-',label = 'Random forest',lw = 3, alpha = 1)
     auroc = auc(rf_pool_fpr,rf_pool_tpr)
     ax2.plot(rf_pool_fpr,rf_pool_tpr,linestyle = '-',label = r"Random forest (AUROC = %0.2f )" % (auroc),lw = 2, alpha = 1)
     
-    xgb_pool_auroc,xgb_pool_fpr,xgb_pool_tpr = train_xgb()
+    xgb_pool_auroc,xgb_pool_fpr,xgb_pool_tpr,xgb_pred_df,xgb_prec = train_xgb()
+    xgb_pred_df.to_csv(PLOT_DIREC+'Mitomics/pooled_predictions_XGBoost_Mitomics_with_target.csv')
     ax1.plot(ratio_list,xgb_pool_auroc,linestyle = '-',label = 'XGBoost',lw = 3, alpha = 1)
+    ax3.plot(ratio_list,xgb_prec[20],linestyle = '-',label = 'XGBoost',lw = 3, alpha = 1)
+    ax4.plot(ratio_list,xgb_prec[100],linestyle = '-',label = 'XGBoost',lw = 3, alpha = 1)
     auroc = auc(xgb_pool_fpr,xgb_pool_tpr)
     ax2.plot(xgb_pool_fpr,xgb_pool_tpr,linestyle = '-',label = r"XGBoost (AUROC = %0.2f )" % (auroc),lw = 2, alpha = 1)
 
-    mlp_pool_auroc,mlp_pool_fpr,mlp_pool_tpr = train_MLP()
+    mlp_pool_auroc,mlp_pool_fpr,mlp_pool_tpr,mlp_pred_df,mlp_prec = train_MLP()
+    mlp_pred_df.to_csv(PLOT_DIREC+'Mitomics/pooled_predictions_MLP_Mitomics_with_target.csv')
     ax1.plot(ratio_list,mlp_pool_auroc,linestyle = '-',label = 'Neural network',lw = 3, alpha = 1)
+    ax3.plot(ratio_list,mlp_prec[20],linestyle = '-',label = 'Neural network',lw = 3, alpha = 1)
+    ax4.plot(ratio_list,mlp_prec[100],linestyle = '-',label = 'Neural network',lw = 3, alpha = 1)
     auroc = auc(mlp_pool_fpr,mlp_pool_tpr)
     ax2.plot(mlp_pool_fpr,mlp_pool_tpr,linestyle = '-',label = r"Neural network (AUROC = %0.2f )" % (auroc),lw = 2, alpha = 1)
 
 
     ## Shortest Path Len
-    spl_data = pd.read_csv(DATA_DIREC+'/Mitomics/shortest_path_length_data.csv',index_col=0)
+    spl_data = pd.read_csv('../../Data/Mitomics/shortest_path_length_data.csv',index_col=0)
     scores = spl_data['shortest_path_length'].to_list()
     labels = spl_data['label'].to_list()
     fpr, tpr, _ = roc_curve(labels, scores)
     auroc = auc(fpr, tpr)
+    # path lengths are stored negated (closer to the target = higher score), so they rank directly
+    spl_prec20 = precision_at_k(labels, scores, 20)
+    spl_prec100 = precision_at_k(labels, scores, 100)
     
 
-    rw_with_target_score = plot_positive_diffusion(DATA_DIREC+'Mitomics/RW_positive_diffusion_Mitomics_state_30.csv')
+    rw_with_target_score, rw_pos_prec = plot_positive_diffusion('../../Data/Mitomics/RW_positive_diffusion_Mitomics_state_30.csv')
     ax1.plot(ratio_list,rw_with_target_score, linestyle='-',marker = 'h',label = 'RW positive diffusion',lw=1,alpha = 0.7)
-    
-    rwr_with_target_score = plot_positive_diffusion(DATA_DIREC+'Mitomics/RWR_positive_diffusion_Mitomics_state_0.2.csv')
-    ax1.plot(ratio_list,rwr_with_target_score, linestyle='-',marker = '*',label = 'RWR positive diffusion',lw=1,alpha = 0.7)  
-    
-    heat_with_target_score = plot_positive_diffusion(DATA_DIREC+'Mitomics/heat_positive_diffusion_Mitomics_state_0.3.csv')
+    ax3.plot(ratio_list,rw_pos_prec[20], linestyle='-',marker = 'h',label = 'RW positive diffusion',lw=1,alpha = 0.7)
+    ax4.plot(ratio_list,rw_pos_prec[100], linestyle='-',marker = 'h',label = 'RW positive diffusion',lw=1,alpha = 0.7)
+
+    rwr_with_target_score, rwr_pos_prec = plot_positive_diffusion('../../Data/Mitomics/RWR_positive_diffusion_Mitomics_state_0.2.csv')
+    ax1.plot(ratio_list,rwr_with_target_score, linestyle='-',marker = '*',label = 'RWR positive diffusion',lw=1,alpha = 0.7)
+    ax3.plot(ratio_list,rwr_pos_prec[20], linestyle='-',marker = '*',label = 'RWR positive diffusion',lw=1,alpha = 0.7)
+    ax4.plot(ratio_list,rwr_pos_prec[100], linestyle='-',marker = '*',label = 'RWR positive diffusion',lw=1,alpha = 0.7)
+
+    heat_with_target_score, heat_pos_prec = plot_positive_diffusion('../../Data/Mitomics/heat_positive_diffusion_Mitomics_state_0.3.csv')
     ax1.plot(ratio_list,heat_with_target_score, linestyle='-',marker = '^',label = 'Heat positive diffusion',lw=1,alpha = 0.7)
+    ax3.plot(ratio_list,heat_pos_prec[20], linestyle='-',marker = '^',label = 'Heat positive diffusion',lw=1,alpha = 0.7)
+    ax4.plot(ratio_list,heat_pos_prec[100], linestyle='-',marker = '^',label = 'Heat positive diffusion',lw=1,alpha = 0.7)
 
 
 
     #ax2.plot(fpr,tpr,label="Shortest_path_len",lw=1,alpha=0.5)
     ratio_list = [i/10 for i in range(1,11)]
-    rw_target_auroc = plot_target_diffusion(DATA_DIREC+'Mitomics/RW_target_diffusion_Mitomics.csv','RW',30)
+    rw_target_auroc, rw_target_prec = plot_target_diffusion('../../Data/Mitomics/RW_target_diffusion_Mitomics.csv','RW',30)
     ax1.plot(ratio_list,[rw_target_auroc]*len(ratio_list), linestyle='--',marker = 'h',label = 'RW target diffusion',lw=1,alpha = 0.7)
+    ax3.plot(ratio_list,[rw_target_prec[20]]*len(ratio_list), linestyle='--',marker = 'h',label = 'RW target diffusion',lw=1,alpha = 0.7)
+    ax4.plot(ratio_list,[rw_target_prec[100]]*len(ratio_list), linestyle='--',marker = 'h',label = 'RW target diffusion',lw=1,alpha = 0.7)
 
-    rwr_target_auroc = plot_target_diffusion(DATA_DIREC+'Mitomics/RWR_target_diffusion_Mitomics.csv','RWR',0.2)
-    ax1.plot(ratio_list,[rwr_target_auroc]*len(ratio_list), linestyle='-',marker = '*',label = 'RWR target diffusion',lw=1,alpha = 0.7)
+    rwr_target_auroc, rwr_target_prec = plot_target_diffusion('../../Data/Mitomics/RWR_target_diffusion_Mitomics.csv','RWR',0.2)
+    ax1.plot(ratio_list,[rwr_target_auroc]*len(ratio_list), linestyle='--',marker = '*',label = 'RWR target diffusion',lw=1,alpha = 0.7)
+    ax3.plot(ratio_list,[rwr_target_prec[20]]*len(ratio_list), linestyle='--',marker = '*',label = 'RWR target diffusion',lw=1,alpha = 0.7)
+    ax4.plot(ratio_list,[rwr_target_prec[100]]*len(ratio_list), linestyle='--',marker = '*',label = 'RWR target diffusion',lw=1,alpha = 0.7)
 
 
-    heat_target_auroc = plot_target_diffusion(DATA_DIREC+'Mitomics/Heat_target_diffusion_Mitomics.csv','heat',0.3)
+    heat_target_auroc, heat_target_prec = plot_target_diffusion('../../Data/Mitomics/heat_target_diffusion_Mitomics.csv','heat',0.3)
     ax1.plot(ratio_list,[heat_target_auroc]*len(ratio_list), linestyle='--',marker = '^',label = 'Heat target diffusion',lw=1,alpha = 0.7)
+    ax3.plot(ratio_list,[heat_target_prec[20]]*len(ratio_list), linestyle='--',marker = '^',label = 'Heat target diffusion',lw=1,alpha = 0.7)
+    ax4.plot(ratio_list,[heat_target_prec[100]]*len(ratio_list), linestyle='--',marker = '^',label = 'Heat target diffusion',lw=1,alpha = 0.7)
 
 
     
     #ax1.legend(bbox_to_anchor=(1, 1), borderaxespad=0.)
-    ax1.set_xlabel("Fraction of the available training set used",fontsize = 14)
-    ax1.set_ylabel('AUROC',fontsize = 14)
+    ax1.set_xlabel("Fraction of the available training set used",fontsize = 20)
+    ax1.set_ylabel('AUROC',fontsize = 20)
     ax1.set_ylim(0.5,1)
-    ax1.tick_params(axis='y', labelsize=14)
-    ax1.tick_params(axis='x', labelsize=14)
+    ax1.tick_params(axis='y', labelsize=16)
+    ax1.tick_params(axis='x', labelsize=16)
     #ax1.set_position([0.1, 0.1, 0.65, 0.8])
-    ax1.plot(ratio_list,[auroc]*len(ratio_list), linestyle='--',label = 'Shortest path length',lw=1,alpha = 0.7)
-    # ax1.legend(loc = 'best',mode = "expand", ncol = 2,fontsize = 'large')
-    ax1.set_title('Mitochondrial protein abundance',fontsize = 16)
-    fig1.savefig(PLOT_DIREC+'Mitomics/Baseline_Comparison_Learning_Curve_Mitomics_with_target.png',dpi = 800)
+    ax1.plot(ratio_list,[auroc]*len(ratio_list), linestyle=(0,(1,4)),label = 'Shortest path length',lw=1,alpha = 0.7)
+    ax3.plot(ratio_list,[spl_prec20]*len(ratio_list), linestyle=(0,(1,4)),label = 'Shortest path length',lw=1,alpha = 0.7)
+    ax4.plot(ratio_list,[spl_prec100]*len(ratio_list), linestyle=(0,(1,4)),label = 'Shortest path length',lw=1,alpha = 0.7)
+    # ax1.legend(loc = 'best',mode = "expand", ncol = 2,fontsize = 14)
+    ax1.set_title('Mitochondrial protein abundance',fontsize = 24)
+    fig1.savefig(PLOT_DIREC+'Mitomics/Baseline_Comparison_Learning_Curve_Mitomics_with_target.png',dpi = 800,bbox_inches='tight')
 
+    # Only show fractions up to 0.5: truncate each curve's data at x <= 0.5 so
+    # the lines end cleanly on their 0.5 point instead of being clipped
+    # mid-segment (which happens if we only set_xlim and the data runs to 1.0).
+    XMAX = 0.5
+    for prec_ax in (ax3, ax4):
+        for line in prec_ax.get_lines():
+            xd = np.asarray(line.get_xdata(), dtype=float)
+            yd = np.asarray(line.get_ydata(), dtype=float)
+            mask = xd <= XMAX + 1e-9
+            line.set_xdata(xd[mask])
+            line.set_ydata(yd[mask])
+
+    # Default precision@K = positive rate (prevalence) in the ranked test set.
+    # A random ranker achieves this precision at any K, so it is the chance
+    # baseline for precision@K (analogue of the diagonal Chance line in the ROC).
+    positive_rate = spl_data['label'].mean()
+    HATCH = '//'            # sparse -> light, unobtrusive
+    HATCH_COLOR = '0.85'    # near-white grey -> shallow shadow
+    BAND_ZORDER = 0
+    for prec_ax in (ax3, ax4):
+        prec_ax.axhspan(
+            0, positive_rate,
+            xmin=0, xmax=1,            # axes fraction -> always full width
+            facecolor='none',          # transparent -> doesn't cover the plot
+            edgecolor=HATCH_COLOR,
+            hatch=HATCH,
+            linewidth=0,               # no border rectangle
+            zorder=BAND_ZORDER,        # behind the lines
+        )
+        prec_ax.axhline(
+            positive_rate, color=HATCH_COLOR, linestyle=':', lw=1,
+            zorder=BAND_ZORDER, label='Positive rate (chance)',
+        )
+
+    # Precision y-axis: 0.4 by default, raised in 0.05 steps if a curve would be
+    # clipped (0.01 headroom keeps markers at the top fully visible)
+    def prec_ylim_top(ax):
+        ymax = max(np.max(line.get_ydata()) for line in ax.get_lines())
+        top = max(0.4, round(np.ceil((ymax + 0.01) / 0.05) * 0.05, 2))
+        print('%s: highest value %.3f, y-axis top %.2f' % (ax.get_ylabel(), ymax, top))
+        return top
+
+    # fig3: Precision@20 learning curve (same layout as fig1)
+    ax3.set_xlabel("Fraction of the available training set used",fontsize = 20)
+    ax3.set_ylabel('Precision@20',fontsize = 20)
+    ax3.set_ylim(0,prec_ylim_top(ax3))
+    ax3.set_xlim(0.08,0.52)
+    ax3.tick_params(axis='y', labelsize=16)
+    ax3.tick_params(axis='x', labelsize=16)
+    ax3.set_title('Mitochondrial protein abundance',fontsize = 24)
+    fig3.savefig(PLOT_DIREC+'Mitomics/Baseline_Comparison_Precision_at_20_Mitomics_with_target.png',dpi = 800,bbox_inches='tight')
+
+    # fig4: Precision@100 learning curve (same layout as fig1)
+    ax4.set_xlabel("Fraction of the available training set used",fontsize = 20)
+    ax4.set_ylabel('Precision@100',fontsize = 20)
+    ax4.set_ylim(0,prec_ylim_top(ax4))
+    ax4.set_xlim(0.08,0.52)
+    ax4.tick_params(axis='y', labelsize=16)
+    ax4.tick_params(axis='x', labelsize=16)
+    ax4.set_title('Mitochondrial protein abundance',fontsize = 24)
+    fig4.savefig(PLOT_DIREC+'Mitomics/Baseline_Comparison_Precision_at_100_Mitomics_with_target.png',dpi = 800,bbox_inches='tight')
+    # plt.show()
     ax2.legend(bbox_to_anchor=(1, 1), borderaxespad=0.)
     
-    ax2.set_xlabel("False positive rate",fontsize = 14)
-    ax2.set_ylabel("True positive rate",fontsize = 14)
-    ax2.tick_params(axis='y', labelsize=14)
-    ax2.tick_params(axis='x', labelsize=14)
+    ax2.set_xlabel("False positive rate",fontsize = 20)
+    ax2.set_ylabel("True positive rate",fontsize = 20)
+    ax2.tick_params(axis='y', labelsize=16)
+    ax2.tick_params(axis='x', labelsize=16)
     #ax2.set_position([0.1, 0.1, 0.65, 0.8])
     ax2.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.7)
     # ax2.legend(loc = 'lower right')
-    ax2.legend(loc = 'best',fontsize = 'large')
-    ax2.set_title('Mitochondrial protein abundance',fontsize = 16)
-    fig2.savefig(PLOT_DIREC+'Plot/Mitomics/Baseline_Comparison_ROC_Mitomics_with_target.png',dpi = 800)
+    ax2.legend(loc = 'best',fontsize = 14)
+    ax2.set_title('Mitochondrial protein abundance',fontsize = 24)
+    fig2.savefig(PLOT_DIREC+'/Mitomics/Baseline_Comparison_ROC_Mitomics_with_target.png',dpi = 800,bbox_inches='tight')
 
 if __name__=='__main__':
     plot_learning_curve()

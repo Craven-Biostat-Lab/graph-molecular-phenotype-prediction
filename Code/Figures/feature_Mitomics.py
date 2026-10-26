@@ -16,6 +16,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.inspection import permutation_importance
 from sklearn.preprocessing import MinMaxScaler
 import argparse
+import sys
+sys.path.insert(0, '../Dataset')  # merge_feature.py lives in Code/Dataset
 import merge_feature as mf 
 from stringdb_alias import HGNCMapper
 from sklearn.utils.class_weight import compute_class_weight
@@ -31,7 +33,7 @@ from torch.utils.data import Dataset,DataLoader
 import torch.optim as optim
 warnings.filterwarnings('ignore')
 
-DATA_DIREC = '../Data/'
+DATA_DIREC = '../../'
 
 def seed_everything(seed=123):
     """"
@@ -129,13 +131,13 @@ class CustomDataset(Dataset):
 def train_lr(data_path,feature_name):
     all_pred,all_true,fold_auroc,fold_auprc= list(),list(),list(),list()
     for i in range(5):
-        lr_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_mitomics_LogisticRegression_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+        lr_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_Mitomics_LogisticRegression_fold_'+str(i)+'_ratio_1.0_5fold.json'))
         if feature_name != 'All':
             train_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_train_by_source.csv',index_col = 0)
             test_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_test_by_source.csv',index_col = 0)
         else:
-            train_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
-            test_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            train_data = pd.read_csv(DATA_DIREC+'/Data/Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv(DATA_DIREC+'/Data/Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
             train_data = train_data.drop(['Target'],axis = 1)
             test_data = test_data.drop(['Target'],axis = 1)
         # print(i)
@@ -163,13 +165,13 @@ def train_lr(data_path,feature_name):
 def train_rf(data_path,feature_name):
     all_pred,all_true,fold_auroc,fold_auprc= list(),list(),list(),list()
     for i in range(5):
-        rf_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_mitomics_RandomForest_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+        rf_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_Mitomics_RandomForest_fold_'+str(i)+'_ratio_1.0_5fold.json'))
         if feature_name != 'All':
             train_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_train_by_source.csv',index_col = 0)
             test_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_test_by_source.csv',index_col = 0)
         else:
-            train_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
-            test_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            train_data = pd.read_csv(DATA_DIREC+'/Data/Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv(DATA_DIREC+'/Data/Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
             train_data = train_data.drop(['Target'],axis = 1)
             test_data = test_data.drop(['Target'],axis = 1)
         X_train,y_train = np.array(train_data.iloc[:,:-1]),np.array(train_data.iloc[:,-1])
@@ -191,13 +193,13 @@ def train_rf(data_path,feature_name):
 def train_xgb(data_path,feature_name):
     all_pred,all_true,fold_auroc,fold_auprc= list(),list(),list(),list()
     for i in range(5):
-        xgb_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+        xgb_config = json.load(open(DATA_DIREC+'config/Mitomics/best_paras_Mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
         if feature_name != 'All':
             train_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_train_by_source.csv',index_col = 0)
             test_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_test_by_source.csv',index_col = 0)
         else:
-            train_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
-            test_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            train_data = pd.read_csv(DATA_DIREC+'/Data/Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv(DATA_DIREC+'/Data/Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
             train_data = train_data.drop(['Target'],axis = 1)
             test_data = test_data.drop(['Target'],axis = 1)
         X_train,y_train = np.array(train_data.iloc[:,:-1]),np.array(train_data.iloc[:,-1])
@@ -226,8 +228,8 @@ def train_MLP(data_path,feature_name):
             train_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_train_by_source.csv',index_col = 0)
             test_data = pd.read_csv(data_path+'fold_'+str(i)+'_'+feature_name+'_test_by_source.csv',index_col = 0)
         else:
-            train_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
-            test_data = pd.read_csv(DATA_DIREC+'Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
+            train_data = pd.read_csv(DATA_DIREC+'/Data/Mitomics/fold_'+str(i)+'_train_by_source_with_target_feature.csv',index_col = 0)
+            test_data = pd.read_csv(DATA_DIREC+'/Data/Mitomics/fold_'+str(i)+'_test_by_source_with_target_feature.csv',index_col = 0)
             train_data = train_data.drop(['Target'],axis = 1)
             test_data = test_data.drop(['Target'],axis = 1)
         X_train,y_train = train_data.iloc[:,:-1],train_data.iloc[:,-1]
@@ -486,17 +488,17 @@ def calc_Comparison_Metrics(feature_path,feature_list,feature_group,save_path,da
         sem_prc_df.to_csv(save_path+model_name+'_'+data_name+'sem_prc_df.csv')
     
 if __name__=='__main__':
-    DATA_DIREC = '../../Data/'
+    DATA_DIREC = '../../'
     PLOT_DIREC = '../../Plot/'
     feature_list =['Source','Target','Source_Target_Relation','All']
     feature_group = ['source_feature','target_feature','ppi_feature','All']
     
-    feature_path=  DATA_DIREC+'Mitomics/split_subgraph/'
+    feature_path=  DATA_DIREC+'/Data/Mitomics/split_subgraph/'
 
 
     calc_Comparison_Metrics(feature_path,feature_list,feature_group,
                         save_path = PLOT_DIREC+'/Mitomics/',
-                        data_name = 'Subgraph_feature_comparison_Mitomics_',
+                        data_name = 'Hierarchical_feature_comparison_Mitomics_',
                         phenotype = 'Mitomics'
                         )
     
@@ -504,7 +506,7 @@ if __name__=='__main__':
     feature_list = ['Abundance','Subcell','Source_Target_Relation','GO','All']
     feature_group = ['abundance_feature','localization_feature','ppi_feature','go_feature','All']
     
-    feature_path=  DATA_DIREC+'Mitomics/split_feature_group/'
+    feature_path=  DATA_DIREC+'/Data/Mitomics/split_feature_group/'
 
 
     calc_Comparison_Metrics(feature_path,feature_list,feature_group,

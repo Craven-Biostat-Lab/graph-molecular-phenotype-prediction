@@ -11,6 +11,7 @@ from sklearn.utils.class_weight import compute_class_weight
 import json
 import random
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import os
 import pickle
 import warnings
@@ -18,9 +19,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset,DataLoader
 warnings.filterwarnings('ignore')
-
-DATA_DIREC = '../../Data/'
-PLOT_DIREC = '../../Plot/'
+# Arial for all plot text. Where Arial isn't installed (e.g. CHTC), send Arial.ttf with the job; it is loaded from the working directory.
+if os.path.exists('Arial.ttf'):
+    fm.fontManager.addfont('Arial.ttf')
+plt.rcParams["font.family"] = "Arial"
+times = fm.FontProperties(family="Arial", size = 16)
+print(times.get_name())
 
 
 def seed_everything(seed=123):
@@ -107,10 +111,10 @@ def train_rf(data,n_folds,target,rf_config_path = None):
         y_test = np.array(test_data.iloc[:,-1])
         if rf_config != None:
             seed_everything()
-            model = RandomForestClassifier(**rf_config,class_weight='balanced')
+            model = RandomForestClassifier(**rf_config,class_weight='balanced',random_state=123)
         else:
             seed_everything()
-            model = RandomForestClassifier(n_estimators=1000,class_weight='balanced')
+            model = RandomForestClassifier(n_estimators=1000,class_weight='balanced',random_state=123)
         model.fit(X_train, y_train)
         test_score = model.predict_proba(X_test)[:, 1]
         all_true.extend(y_test)
@@ -119,19 +123,19 @@ def train_rf(data,n_folds,target,rf_config_path = None):
 
 def main():
     phenotype = 'LDLR'
-    data1 = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_'+phenotype+'_with_target_feature.csv',index_col = 0)
-    target = list(np.load(DATA_DIREC+phenotype+'_target.npy'))
-    true_1,pred_1 = train_rf(data1,n_folds=5,target=target,rf_config_path = DATA_DIREC+'config/'+phenotype+'/best_paras_'+phenotype+'_RandomForest_subset_False_')
+    data1 = pd.read_csv('../../Data/'+phenotype+'/train_node_attribute_'+phenotype+'_with_target_feature.csv',index_col = 0)
+    target = list(np.load('../../Data/targets/'+phenotype+'_target.npy'))
+    true_1,pred_1 = train_rf(data1,n_folds=5,target=target,rf_config_path = '../../config/'+phenotype+'/best_paras_'+phenotype+'_RandomForest_subset_False_')
     fpr_1, tpr_1, _ = roc_curve(true_1, pred_1)
     auc_1 = auc(fpr_1,tpr_1)
-    data2 = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_'+phenotype+'_with_target_feature_target_6.csv',index_col = 0)
-    target = list(np.load(DATA_DIREC+'targets/'+phenotype+'_target_6.npy'))
-    true_2,pred_2 = train_rf(data2,n_folds=5,target=target,rf_config_path = DATA_DIREC+'config/'+phenotype+'/best_paras_'+phenotype+'_RandomForest_subset_False_')
+    data2 = pd.read_csv('../../Data/'+phenotype+'/train_node_attribute_'+phenotype+'_with_target_feature_target_6.csv',index_col = 0)
+    target = list(np.load('../../Data/targets/'+phenotype+'_target_6.npy'))
+    true_2,pred_2 = train_rf(data2,n_folds=5,target=target,rf_config_path = '../../config/'+phenotype+'/best_paras_'+phenotype+'_RandomForest_subset_False_')
     fpr_2, tpr_2, _ = roc_curve(true_2, pred_2)
     auc_2 = auc(fpr_2,tpr_2)
-    data3 = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_'+phenotype+'_with_target_feature_target_27.csv',index_col = 0)
-    target = list(np.load(DATA_DIREC+'targets/'+phenotype+'_target_27.npy'))
-    true_3,pred_3 = train_rf(data3,n_folds=5,target=target,rf_config_path = DATA_DIREC+'config/'+phenotype+'/best_paras_'+phenotype+'_RandomForest_subset_False_')
+    data3 = pd.read_csv('../../Data/'+phenotype+'/train_node_attribute_'+phenotype+'_with_target_feature_target_27.csv',index_col = 0)
+    target = list(np.load('../../Data/targets/'+phenotype+'_target_27.npy'))
+    true_3,pred_3 = train_rf(data3,n_folds=5,target=target,rf_config_path = '../../config/'+phenotype+'/best_paras_'+phenotype+'_RandomForest_subset_False_')
     fpr_3, tpr_3, _ = roc_curve(true_3, pred_3)
     auc_3 = auc(fpr_3,tpr_3)
     fig,ax = plt.subplots()
@@ -139,13 +143,13 @@ def main():
     ax.plot(fpr_2,tpr_2,label="%s (AUC = %0.2f)" % ('6 targets',auc_2),lw=2,alpha=1)
     ax.plot(fpr_3,tpr_3,label="%s (AUC = %0.2f)" % ('27 targets',auc_3),lw=2,alpha=1)
     ax.plot([0, 1], [0, 1], linestyle="--", lw=2, color="r", label="Chance", alpha=0.7)
-    ax.set_xlabel("False positive rate",fontsize = 14)
-    ax.set_ylabel("True positive rate",fontsize = 14)
-    ax.tick_params(axis='y', labelsize=14)
-    ax.tick_params(axis='x', labelsize=14)
-    ax.legend( loc="lower right",fontsize = 'large')
-    ax.set_title('Cholesterol uptake',fontsize = 18)
-    fig.savefig(PLOT_DIREC+phenotype+'/FigureS2_ROC_Curves.png',dpi = 800)
+    ax.legend( loc="lower right",prop=times)
+    ax.set_xlabel("False positive rate",fontproperties=times,fontsize = 16)
+    ax.set_ylabel("True positive rate",fontproperties=times,fontsize = 16)
+    ax.tick_params(axis='y',labelsize=14)
+    ax.tick_params(axis='x',labelsize=14)
+    ax.set_title('Cholesterol uptake',fontproperties=times,fontsize = 20)
+    fig.savefig('../../Plot/'+phenotype+'/FigureS2_ROC_Curves.png',dpi = 800)
 
 if __name__=='__main__':
     main()

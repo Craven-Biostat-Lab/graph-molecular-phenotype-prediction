@@ -12,6 +12,7 @@ from sklearn.metrics import accuracy_score, classification_report
 import torch.optim as optim
 import torch
 import pickle
+import shap
 import torch.nn as nn
 from torch.utils.data import Dataset,DataLoader
 import json
@@ -73,25 +74,26 @@ class CustomDataset(Dataset):
     def __getitem__(self, idx):
         return self.features[idx], self.labels[idx]
 
+def to_df(values, X_test):
+    if isinstance(values, list):
+        values = values[1]
+    elif hasattr(values, "ndim") and values.ndim == 3:
+        values = values[:, :, 1]
+    return pd.DataFrame(values, columns=X_test.columns, index=X_test.index)
 
 
-##
-DATA_DIREC = '../../Data/'
-PLOT_DIREC = '../../Plot/'
-
-## ST-relation features only
+## All features
 phenotype = 'SREBP2'
-SREBP2_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_SREBP2_transfer_st_relation.csv',index_col=0)
+SREBP2_data = pd.read_csv('../../Data/SREBP2/train_node_attribute_SREBP2_transfer.csv',index_col=0)
 
 phenotype = 'Influenza'
-Influenza_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_Influenza_transfer_st_relation.csv',index_col=0)
+Influenza_data = pd.read_csv('../../Data/Influenza/train_node_attribute_Influenza_transfer.csv',index_col=0)
 
 phenotype = 'LDLR'
-LDLR_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_LDLR_transfer_st_relation.csv',index_col=0)
+LDLR_data = pd.read_csv('../../Data/LDLR/train_node_attribute_LDLR_transfer.csv',index_col=0)
 
 phenotype = 'Mitomics'
-Mitomics_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_Mitomics_transfer_st_relation.csv',index_col = 0)
-
+Mitomics_data = pd.read_csv('../../Data/Mitomics/train_node_attribute_Mitomics_transfer.csv',index_col = 0)
 
 
 train_list = [('Cholesterol homeostasis',SREBP2_data,'SREBP2'),('Cholesterol uptake',LDLR_data,'LDLR'),('Influenza A virus replication',Influenza_data,'Influenza'),('Mitochondrial protein abundance',Mitomics_data,'Mitomics')]
@@ -115,7 +117,7 @@ for train_dataset in train_list:
             train_pheno_data = test_pheno_data.copy()
             if test_name != 'Mitomics':
                 skf = StratifiedKFold(n_splits=5, shuffle=True,random_state=123)
-                target = list(np.load(DATA_DIREC+'/targets/'+train_name+'_target.npy'))
+                target = list(np.load('../../Data/targets/'+train_name+'_target.npy'))
                 data = train_pheno_data.copy()
                 target_data = data.loc[target,]
                 target_data['label'] = 1
@@ -123,7 +125,7 @@ for train_dataset in train_list:
                 all_true = list()
                 all_pred = list()
                 for i, (train_index, test_index) in enumerate(skf.split(data.iloc[:,:-1], data.iloc[:,-1])):
-                    xgb_config = json.load(open(DATA_DIREC+'/config/'+train_name+'/best_paras_'+train_name+'_XGBoost_subset_False_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+                    xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_XGBoost_subset_False_fold_'+str(i)+'_ratio_1.0_5fold.json'))
                     target_fold_feature = target_data.copy()
                     fold_feature = train_pheno_data.copy()
                     train_data = fold_feature.iloc[train_index,]
@@ -132,8 +134,11 @@ for train_dataset in train_list:
                     y_train = np.array(train_data.iloc[:,-1])
                     X_test = np.array(fold_feature.iloc[test_index,:-1])
                     y_test = np.array(fold_feature.iloc[test_index,-1])
+                    # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+                    # X_train, y_train = ros.fit_resample(X_train, y_train)
                     class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
                     class_weight={0: class_weights[0], 1: class_weights[1]}
+                    # xgb_config = json.load(open('../../config/'+test_name+'/best_paras_'+test_name+'_XGBoost_subset_False_with_target.json'))
                     seed_everything()
                     model = xgb.XGBClassifier(**xgb_config)
                     model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
@@ -146,17 +151,24 @@ for train_dataset in train_list:
                 precision,recall,_ = precision_recall_curve(all_true,all_pred)
                 auc_prc = average_precision_score(all_true,all_pred)
                 xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+                # y_pred = [1 if score >= 0.5 else 0 for score in y_prob]
+                # xgb_f1_df.loc[train_fig_name,test_fig_name] = f1_score(y_test,y_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_pred.npy',all_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_true.npy',all_true)
             elif test_name == 'Mitomics':
                 feature_columns = Mitomics_data.columns
                 all_pred = list()
                 all_true = list()
                 for i in range(5):
-                    xgb_config = json.load(open(DATA_DIREC+'/config/Mitomics/best_paras_mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
-                    test_source = np.load(DATA_DIREC+'/Mitomics/Partition_Source/fold_'+str(i)+'_test_protein.npy')
+                    xgb_config = json.load(open('../../config/Mitomics/best_paras_Mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+                    test_source = np.load('../../Data/Mitomics/fold_'+str(i)+'_test_protein.npy')
                     train_data = train_raw_data[~train_raw_data.index.isin(test_source)]
                     test_data = train_raw_data[train_raw_data.index.isin(test_source)]
+                    # train_raw_data, test_data = train_raw_data[feature_columns],test_data[feature_columns]
                     X_train, y_train = train_data.iloc[:,:-1],train_data.iloc[:,-1]
                     X_test, y_test = test_data.iloc[:,:-1],test_data.iloc[:,-1]
+                    # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+                    # X_train, y_train = ros.fit_resample(X_train, y_train)
                     class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
                     class_weight={0: class_weights[0], 1: class_weights[1]}
                     seed_everything()
@@ -171,127 +183,21 @@ for train_dataset in train_list:
                 precision,recall,_ = precision_recall_curve(all_true,all_pred)
                 auc_prc = average_precision_score(all_true,all_pred)
                 xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+                # y_pred = [1 if score >= 0.5 else 0 for score in y_prob]
+                # xgb_f1_df.loc[train_fig_name,test_fig_name] = f1_score(y_test,y_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_pred.npy',all_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_true.npy',all_true)
         else:
             X_train = train_pheno_data.iloc[:, :-1]
             y_train = train_pheno_data.iloc[:, -1]
             X_test = test_pheno_data.iloc[:, :-1]
             y_test = test_pheno_data.iloc[:, -1]
+            # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+            # X_train, y_train = ros.fit_resample(X_train, y_train)
             class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
             class_weight={0: class_weights[0], 1: class_weights[1]}
-            xgb_config = json.load(open(DATA_DIREC+'/config/'+train_name+'/best_paras_'+train_name+'_transfer_st_relation_XGBoost_transfer.json'))
-            seed_everything()
-            model = xgb.XGBClassifier(**xgb_config)
-            model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
-            y_prob = model.predict_proba(X_test)[:, 1]
-            fpr, tpr, _ = roc_curve(y_test, y_prob)
-            auc_score = auc(fpr,tpr)
-            xgb_auc_df.loc[train_fig_name,test_fig_name] = auc_score
-            precision,recall,_ = precision_recall_curve(y_test,y_prob)
-            auc_prc = average_precision_score(y_test,y_prob)
-            xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
-
-xgb_auc_df.to_csv(PLOT_DIREC+'/Transfer/Transfer_AUROC_XGBoost_st_relation.csv')
-xgb_prc_df.to_csv(PLOT_DIREC+'/Transfer/Transfer_AUPRC_XGBoost_st_relation.csv')
-
-# All features
-phenotype = 'SREBP2'
-SREBP2_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_SREBP2_transfer.csv',index_col=0)
-
-phenotype = 'Influenza'
-Influenza_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_Influenza_transfer.csv',index_col=0)
-
-phenotype = 'LDLR'
-LDLR_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_LDLR_transfer.csv',index_col=0)
-
-phenotype = 'Mitomics'
-Mitomics_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_Mitomics_transfer.csv',index_col = 0)
-
-
-train_list = [('Cholesterol homeostasis',SREBP2_data,'SREBP2'),('Cholesterol uptake',LDLR_data,'LDLR'),('Influenza A virus replication',Influenza_data,'Influenza'),('Mitochondrial protein abundance',Mitomics_data,'Mitomics')]
-test_list = [('Cholesterol \nhomeostasis',SREBP2_data,'SREBP2'),('Cholesterol \nuptake',LDLR_data,'LDLR'),('Influenza A \nvirus replication',Influenza_data,'Influenza'),('Mitochondrial \nprotein abundance',Mitomics_data,'Mitomics')]
-# XGBoost
-xgb_auc_df = pd.DataFrame(index =[train_list[i][0]for i in range(len(train_list))],columns= [test_list[i][0]for i in range(len(test_list))])
-xgb_prc_df = pd.DataFrame(index =[train_list[i][0]for i in range(len(train_list))],columns= [test_list[i][0]for i in range(len(test_list))])
-xgb_f1_df = pd.DataFrame(index =[train_list[i][0]for i in range(len(train_list))],columns= [test_list[i][0]for i in range(len(test_list))])
-for train_dataset in train_list:
-    train_raw_data = train_dataset[1]
-    train_name = train_dataset[2]
-    train_fig_name = train_dataset[0]
-    for test_dataset in test_list:
-        test_fig_name = test_dataset[0]
-        test_name = test_dataset[2]
-        test_raw_data = test_dataset[1]
-        features_2use = [col for col in train_raw_data.columns if col in test_raw_data.columns]
-        train_pheno_data = train_raw_data.loc[:,features_2use]
-        test_pheno_data = test_raw_data.loc[:,features_2use]
-        if test_name == train_name:
-            train_pheno_data = test_pheno_data.copy()
-            if test_name != 'Mitomics':
-                skf = StratifiedKFold(n_splits=5, shuffle=True,random_state=123)
-                target = list(np.load(DATA_DIREC+'/targets/'+train_name+'_target.npy'))
-                data = train_pheno_data.copy()
-                target_data = data.loc[target,]
-                target_data['label'] = 1
-                data = data.drop(target)
-                all_true = list()
-                all_pred = list()
-                for i, (train_index, test_index) in enumerate(skf.split(data.iloc[:,:-1], data.iloc[:,-1])):
-                    xgb_config = json.load(open(DATA_DIREC+'/config/'+train_name+'/best_paras_'+train_name+'_XGBoost_subset_False_fold_'+str(i)+'_ratio_1.0_5fold.json'))
-                    target_fold_feature = target_data.copy()
-                    fold_feature = train_pheno_data.copy()
-                    train_data = fold_feature.iloc[train_index,]
-                    train_data = pd.concat([train_data,target_fold_feature])
-                    X_train = np.array(train_data.iloc[:,:-1])
-                    y_train = np.array(train_data.iloc[:,-1])
-                    X_test = np.array(fold_feature.iloc[test_index,:-1])
-                    y_test = np.array(fold_feature.iloc[test_index,-1])
-                    class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
-                    class_weight={0: class_weights[0], 1: class_weights[1]}
-                    seed_everything()
-                    model = xgb.XGBClassifier(**xgb_config)
-                    model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
-                    score = model.predict_proba(X_test)[:, 1]
-                    all_true.extend(y_test)
-                    all_pred.extend(score)
-                fpr,tpr,_ = roc_curve(all_true,all_pred)
-                auc_score = auc(fpr,tpr)
-                xgb_auc_df.loc[train_fig_name,test_fig_name] = auc_score
-                precision,recall,_ = precision_recall_curve(all_true,all_pred)
-                auc_prc = average_precision_score(all_true,all_pred)
-                xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
-            elif test_name == 'Mitomics':
-                feature_columns = Mitomics_data.columns
-                all_pred = list()
-                all_true = list()
-                for i in range(5):
-                    xgb_config = json.load(open(DATA_DIREC+'/config/Mitomics/best_paras_mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
-                    test_source = np.load(DATA_DIREC+'/Mitomics/Partition_Source/fold_'+str(i)+'_test_protein.npy')
-                    train_data = train_raw_data[~train_raw_data.index.isin(test_source)]
-                    test_data = train_raw_data[train_raw_data.index.isin(test_source)]
-                    X_train, y_train = train_data.iloc[:,:-1],train_data.iloc[:,-1]
-                    X_test, y_test = test_data.iloc[:,:-1],test_data.iloc[:,-1]
-                    class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
-                    class_weight={0: class_weights[0], 1: class_weights[1]}
-                    seed_everything()
-                    model = xgb.XGBClassifier(**xgb_config)
-                    model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
-                    score = model.predict_proba(X_test)[:, 1]
-                    all_true.extend(y_test)
-                    all_pred.extend(score)
-                fpr,tpr,_ = roc_curve(all_true,all_pred)
-                auc_score = auc(fpr,tpr)
-                xgb_auc_df.loc[train_fig_name,test_fig_name] = auc_score
-                precision,recall,_ = precision_recall_curve(all_true,all_pred)
-                auc_prc = average_precision_score(all_true,all_pred)
-                xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
-        else:
-            X_train = train_pheno_data.iloc[:, :-1]
-            y_train = train_pheno_data.iloc[:, -1]
-            X_test = test_pheno_data.iloc[:, :-1]
-            y_test = test_pheno_data.iloc[:, -1]
-            class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
-            class_weight={0: class_weights[0], 1: class_weights[1]}
-            xgb_config = json.load(open(DATA_DIREC+'/config/'+train_name+'/best_paras_'+train_name+'_transfer_XGBoost_transfer.json'))
+            xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_transfer_XGBoost_transfer.json'))
+            # xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_transfer_ppi_only_XGBoost_transfer.json'))
             seed_everything()
             model = xgb.XGBClassifier(**xgb_config)
             # model = xgb.XGBClassifier()
@@ -303,26 +209,35 @@ for train_dataset in train_list:
             precision,recall,_ = precision_recall_curve(y_test,y_prob)
             auc_prc = average_precision_score(y_test,y_prob)
             xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+            ### Shap
+            explainer = shap.TreeExplainer(model,X_train)
+            shap_df = to_df(explainer.shap_values(X_test), X_test)
+            ev = explainer.expected_value
+            base_value = ev[1] if hasattr(ev, "__len__") else ev
+            shap_df['prediction'] = y_prob
+            shap_df['base_value'] = base_value
+            shap_df.to_csv(f'../../Plot/Transfer_tuned/Transfer_SHAP_XGBoost_train_{train_name}_test_{test_name}_all_features.csv')
 
 
 
-xgb_auc_df.to_csv(PLOT_DIREC+'/Transfer/Transfer_AUROC_XGBoost_all_features.csv')
-xgb_prc_df.to_csv(PLOT_DIREC+'/Transfer/Transfer_AUPRC_XGBoost_all_features.csv')
+xgb_auc_df.to_csv('../../Plot/Transfer_tuned/Transfer_AUROC_XGBoost_all_features.csv')
+xgb_prc_df.to_csv('../../Plot/Transfer_tuned/Transfer_AUPRC_XGBoost_all_features.csv')
 
 
 
-## PPI-network features only
+### PPI-network feature only
 phenotype = 'SREBP2'
-SREBP2_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_SREBP2_transfer_ppi_only.csv',index_col=0)
+SREBP2_data = pd.read_csv('../../Data/SREBP2/train_node_attribute_SREBP2_transfer_ppi_only.csv',index_col=0)
 
 phenotype = 'Influenza'
-Influenza_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_Influenza_transfer_ppi_only.csv',index_col=0)
+Influenza_data = pd.read_csv('../../Data/Influenza/train_node_attribute_Influenza_transfer_ppi_only.csv',index_col=0)
 
 phenotype = 'LDLR'
-LDLR_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_LDLR_transfer_ppi_only.csv',index_col=0)
+LDLR_data = pd.read_csv('../../Data/LDLR/train_node_attribute_LDLR_transfer_ppi_only.csv',index_col=0)
 
 phenotype = 'Mitomics'
-Mitomics_data = pd.read_csv(DATA_DIREC+phenotype+'/train_node_attribute_Mitomics_transfer_ppi_only.csv',index_col = 0)
+Mitomics_data = pd.read_csv('../../Data/Mitomics/train_node_attribute_Mitomics_transfer_ppi_only.csv',index_col = 0)
+
 
 
 train_list = [('Cholesterol homeostasis',SREBP2_data,'SREBP2'),('Cholesterol uptake',LDLR_data,'LDLR'),('Influenza A virus replication',Influenza_data,'Influenza'),('Mitochondrial protein abundance',Mitomics_data,'Mitomics')]
@@ -346,7 +261,7 @@ for train_dataset in train_list:
             train_pheno_data = test_pheno_data.copy()
             if test_name != 'Mitomics':
                 skf = StratifiedKFold(n_splits=5, shuffle=True,random_state=123)
-                target = list(np.load(DATA_DIREC+'/targets/'+train_name+'_target.npy'))
+                target = list(np.load('../../Data/targets/'+train_name+'_target.npy'))
                 data = train_pheno_data.copy()
                 target_data = data.loc[target,]
                 target_data['label'] = 1
@@ -354,7 +269,7 @@ for train_dataset in train_list:
                 all_true = list()
                 all_pred = list()
                 for i, (train_index, test_index) in enumerate(skf.split(data.iloc[:,:-1], data.iloc[:,-1])):
-                    xgb_config = json.load(open(DATA_DIREC+'/config/'+train_name+'/best_paras_'+train_name+'_XGBoost_subset_False_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+                    xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_XGBoost_subset_False_fold_'+str(i)+'_ratio_1.0_5fold.json'))
                     target_fold_feature = target_data.copy()
                     fold_feature = train_pheno_data.copy()
                     train_data = fold_feature.iloc[train_index,]
@@ -363,8 +278,11 @@ for train_dataset in train_list:
                     y_train = np.array(train_data.iloc[:,-1])
                     X_test = np.array(fold_feature.iloc[test_index,:-1])
                     y_test = np.array(fold_feature.iloc[test_index,-1])
+                    # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+                    # X_train, y_train = ros.fit_resample(X_train, y_train)
                     class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
                     class_weight={0: class_weights[0], 1: class_weights[1]}
+                    # xgb_config = json.load(open('../../config/'+test_name+'/best_paras_'+test_name+'_XGBoost_subset_False_with_target.json'))
                     seed_everything()
                     model = xgb.XGBClassifier(**xgb_config)
                     model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
@@ -377,17 +295,24 @@ for train_dataset in train_list:
                 precision,recall,_ = precision_recall_curve(all_true,all_pred)
                 auc_prc = average_precision_score(all_true,all_pred)
                 xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+                # y_pred = [1 if score >= 0.5 else 0 for score in y_prob]
+                # xgb_f1_df.loc[train_fig_name,test_fig_name] = f1_score(y_test,y_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_pred.npy',all_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_true.npy',all_true)
             elif test_name == 'Mitomics':
                 feature_columns = Mitomics_data.columns
                 all_pred = list()
                 all_true = list()
                 for i in range(5):
-                    xgb_config = json.load(open(DATA_DIREC+'/config/Mitomics/best_paras_mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
-                    test_source = np.load(DATA_DIREC+'/Mitomics/Partition_Source/fold_'+str(i)+'_test_protein.npy')
+                    xgb_config = json.load(open('../../config/Mitomics/best_paras_Mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+                    test_source = np.load('../../Data/Mitomics/fold_'+str(i)+'_test_protein.npy')
                     train_data = train_raw_data[~train_raw_data.index.isin(test_source)]
                     test_data = train_raw_data[train_raw_data.index.isin(test_source)]
+                    # train_raw_data, test_data = train_raw_data[feature_columns],test_data[feature_columns]
                     X_train, y_train = train_data.iloc[:,:-1],train_data.iloc[:,-1]
                     X_test, y_test = test_data.iloc[:,:-1],test_data.iloc[:,-1]
+                    # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+                    # X_train, y_train = ros.fit_resample(X_train, y_train)
                     class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
                     class_weight={0: class_weights[0], 1: class_weights[1]}
                     seed_everything()
@@ -402,14 +327,21 @@ for train_dataset in train_list:
                 precision,recall,_ = precision_recall_curve(all_true,all_pred)
                 auc_prc = average_precision_score(all_true,all_pred)
                 xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+                # y_pred = [1 if score >= 0.5 else 0 for score in y_prob]
+                # xgb_f1_df.loc[train_fig_name,test_fig_name] = f1_score(y_test,y_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_pred.npy',all_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_true.npy',all_true)
         else:
             X_train = train_pheno_data.iloc[:, :-1]
             y_train = train_pheno_data.iloc[:, -1]
             X_test = test_pheno_data.iloc[:, :-1]
             y_test = test_pheno_data.iloc[:, -1]
+            # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+            # X_train, y_train = ros.fit_resample(X_train, y_train)
             class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
             class_weight={0: class_weights[0], 1: class_weights[1]}
-            xgb_config = json.load(open(DATA_DIREC+'/config/'+train_name+'/best_paras_'+train_name+'_transfer_ppi_only_XGBoost_transfer.json'))
+            # xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_transfer_XGBoost_transfer.json'))
+            xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_transfer_ppi_only_XGBoost_transfer.json'))
             seed_everything()
             model = xgb.XGBClassifier(**xgb_config)
             # model = xgb.XGBClassifier()
@@ -421,7 +353,154 @@ for train_dataset in train_list:
             precision,recall,_ = precision_recall_curve(y_test,y_prob)
             auc_prc = average_precision_score(y_test,y_prob)
             xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+            ### Shap
+            explainer = shap.TreeExplainer(model,X_train)
+            shap_df = to_df(explainer.shap_values(X_test), X_test)
+            ev = explainer.expected_value
+            base_value = ev[1] if hasattr(ev, "__len__") else ev
+            shap_df['prediction'] = y_prob
+            shap_df['base_value'] = base_value
+            shap_df.to_csv(f'../../Plot/Transfer_tuned/Transfer_SHAP_XGBoost_train_{train_name}_test_{test_name}_ppi_only.csv')
 
-xgb_auc_df.to_csv(PLOT_DIREC+'/Transfer/Transfer_AUROC_XGBoost_ppi_only.csv')
-xgb_prc_df.to_csv(PLOT_DIREC+'/Transfer/Transfer_AUPRC_XGBoost_ppi_only.csv')
+xgb_auc_df.to_csv('../../Plot/Transfer_tuned/Transfer_AUROC_XGBoost_ppi_only.csv')
+xgb_prc_df.to_csv('../../Plot/Transfer_tuned/Transfer_AUPRC_XGBoost_ppi_only.csv')
 
+# ST-relation feature only
+phenotype = 'SREBP2'
+SREBP2_data = pd.read_csv('../../Data/SREBP2/train_node_attribute_SREBP2_transfer_st_relation.csv',index_col=0)
+
+phenotype = 'Influenza'
+Influenza_data = pd.read_csv('../../Data/Influenza/train_node_attribute_Influenza_transfer_st_relation.csv',index_col=0)
+
+phenotype = 'LDLR'
+LDLR_data = pd.read_csv('../../Data/LDLR/train_node_attribute_LDLR_transfer_st_relation.csv',index_col=0)
+
+phenotype = 'Mitomics'
+Mitomics_data = pd.read_csv('../../Data/Mitomics/train_node_attribute_Mitomics_transfer_st_relation.csv',index_col = 0)
+
+
+
+train_list = [('Cholesterol homeostasis',SREBP2_data,'SREBP2'),('Cholesterol uptake',LDLR_data,'LDLR'),('Influenza A virus replication',Influenza_data,'Influenza'),('Mitochondrial protein abundance',Mitomics_data,'Mitomics')]
+test_list = [('Cholesterol \nhomeostasis',SREBP2_data,'SREBP2'),('Cholesterol \nuptake',LDLR_data,'LDLR'),('Influenza A \nvirus replication',Influenza_data,'Influenza'),('Mitochondrial \nprotein abundance',Mitomics_data,'Mitomics')]
+# XGBoost
+xgb_auc_df = pd.DataFrame(index =[train_list[i][0]for i in range(len(train_list))],columns= [test_list[i][0]for i in range(len(test_list))])
+xgb_prc_df = pd.DataFrame(index =[train_list[i][0]for i in range(len(train_list))],columns= [test_list[i][0]for i in range(len(test_list))])
+xgb_f1_df = pd.DataFrame(index =[train_list[i][0]for i in range(len(train_list))],columns= [test_list[i][0]for i in range(len(test_list))])
+for train_dataset in train_list:
+    train_raw_data = train_dataset[1]
+    train_name = train_dataset[2]
+    train_fig_name = train_dataset[0]
+    for test_dataset in test_list:
+        test_fig_name = test_dataset[0]
+        test_name = test_dataset[2]
+        test_raw_data = test_dataset[1]
+        features_2use = [col for col in train_raw_data.columns if col in test_raw_data.columns]
+        train_pheno_data = train_raw_data.loc[:,features_2use]
+        test_pheno_data = test_raw_data.loc[:,features_2use]
+        if test_name == train_name:
+            train_pheno_data = test_pheno_data.copy()
+            if test_name != 'Mitomics':
+                skf = StratifiedKFold(n_splits=5, shuffle=True,random_state=123)
+                target = list(np.load('../../Data/targets/'+train_name+'_target.npy'))
+                data = train_pheno_data.copy()
+                target_data = data.loc[target,]
+                target_data['label'] = 1
+                data = data.drop(target)
+                all_true = list()
+                all_pred = list()
+                for i, (train_index, test_index) in enumerate(skf.split(data.iloc[:,:-1], data.iloc[:,-1])):
+                    xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_XGBoost_subset_False_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+                    target_fold_feature = target_data.copy()
+                    fold_feature = train_pheno_data.copy()
+                    train_data = fold_feature.iloc[train_index,]
+                    train_data = pd.concat([train_data,target_fold_feature])
+                    X_train = np.array(train_data.iloc[:,:-1])
+                    y_train = np.array(train_data.iloc[:,-1])
+                    X_test = np.array(fold_feature.iloc[test_index,:-1])
+                    y_test = np.array(fold_feature.iloc[test_index,-1])
+                    # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+                    # X_train, y_train = ros.fit_resample(X_train, y_train)
+                    class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
+                    class_weight={0: class_weights[0], 1: class_weights[1]}
+                    # xgb_config = json.load(open('../../config/'+test_name+'/best_paras_'+test_name+'_XGBoost_subset_False_with_target.json'))
+                    seed_everything()
+                    model = xgb.XGBClassifier(**xgb_config)
+                    model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
+                    score = model.predict_proba(X_test)[:, 1]
+                    all_true.extend(y_test)
+                    all_pred.extend(score)
+                fpr,tpr,_ = roc_curve(all_true,all_pred)
+                auc_score = auc(fpr,tpr)
+                xgb_auc_df.loc[train_fig_name,test_fig_name] = auc_score
+                precision,recall,_ = precision_recall_curve(all_true,all_pred)
+                auc_prc = average_precision_score(all_true,all_pred)
+                xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+                # y_pred = [1 if score >= 0.5 else 0 for score in y_prob]
+                # xgb_f1_df.loc[train_fig_name,test_fig_name] = f1_score(y_test,y_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_pred.npy',all_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_true.npy',all_true)
+            elif test_name == 'Mitomics':
+                feature_columns = Mitomics_data.columns
+                all_pred = list()
+                all_true = list()
+                for i in range(5):
+                    xgb_config = json.load(open('../../config/Mitomics/best_paras_Mitomics_XGBoost_fold_'+str(i)+'_ratio_1.0_5fold.json'))
+                    test_source = np.load('../../Data/Mitomics/fold_'+str(i)+'_test_protein.npy')
+                    train_data = train_raw_data[~train_raw_data.index.isin(test_source)]
+                    test_data = train_raw_data[train_raw_data.index.isin(test_source)]
+                    # train_raw_data, test_data = train_raw_data[feature_columns],test_data[feature_columns]
+                    X_train, y_train = train_data.iloc[:,:-1],train_data.iloc[:,-1]
+                    X_test, y_test = test_data.iloc[:,:-1],test_data.iloc[:,-1]
+                    # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+                    # X_train, y_train = ros.fit_resample(X_train, y_train)
+                    class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
+                    class_weight={0: class_weights[0], 1: class_weights[1]}
+                    seed_everything()
+                    model = xgb.XGBClassifier(**xgb_config)
+                    model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
+                    score = model.predict_proba(X_test)[:, 1]
+                    all_true.extend(y_test)
+                    all_pred.extend(score)
+                fpr,tpr,_ = roc_curve(all_true,all_pred)
+                auc_score = auc(fpr,tpr)
+                xgb_auc_df.loc[train_fig_name,test_fig_name] = auc_score
+                precision,recall,_ = precision_recall_curve(all_true,all_pred)
+                auc_prc = average_precision_score(all_true,all_pred)
+                xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+                # y_pred = [1 if score >= 0.5 else 0 for score in y_prob]
+                # xgb_f1_df.loc[train_fig_name,test_fig_name] = f1_score(y_test,y_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_pred.npy',all_pred)
+                # np.save('train_'+train_name+'_test_'+test_name+'_XGBoost_y_true.npy',all_true)
+        else:
+            X_train = train_pheno_data.iloc[:, :-1]
+            y_train = train_pheno_data.iloc[:, -1]
+            X_test = test_pheno_data.iloc[:, :-1]
+            y_test = test_pheno_data.iloc[:, -1]
+            # ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
+            # X_train, y_train = ros.fit_resample(X_train, y_train)
+            class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
+            class_weight={0: class_weights[0], 1: class_weights[1]}
+            # xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_transfer_XGBoost_transfer.json'))
+            xgb_config = json.load(open('../../config/'+train_name+'/best_paras_'+train_name+'_transfer_st_relation_XGBoost_transfer.json'))
+            seed_everything()
+            model = xgb.XGBClassifier(**xgb_config)
+            # model = xgb.XGBClassifier()
+            model.fit(X_train, y_train,sample_weight = np.vectorize(class_weight.get)(y_train))
+            y_prob = model.predict_proba(X_test)[:, 1]
+            fpr, tpr, _ = roc_curve(y_test, y_prob)
+            auc_score = auc(fpr,tpr)
+            xgb_auc_df.loc[train_fig_name,test_fig_name] = auc_score
+            precision,recall,_ = precision_recall_curve(y_test,y_prob)
+            auc_prc = average_precision_score(y_test,y_prob)
+            xgb_prc_df.loc[train_fig_name,test_fig_name] = auc_prc
+            ### Shap
+            explainer = shap.TreeExplainer(model,X_train)
+            shap_df = to_df(explainer.shap_values(X_test), X_test)
+            ev = explainer.expected_value
+            base_value = ev[1] if hasattr(ev, "__len__") else ev
+            shap_df['prediction'] = y_prob
+            shap_df['base_value'] = base_value
+            shap_df.to_csv(f'../../Plot/Transfer_tuned/Transfer_SHAP_XGBoost_train_{train_name}_test_{test_name}_st_relation.csv')
+
+xgb_auc_df.to_csv('../../Plot/Transfer_tuned/Transfer_AUROC_XGBoost_st_relation.csv')
+xgb_prc_df.to_csv('../../Plot/Transfer_tuned/Transfer_AUPRC_XGBoost_st_relation.csv')

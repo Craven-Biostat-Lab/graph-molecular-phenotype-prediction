@@ -4,7 +4,6 @@ import xgboost as xgb
 from sklearn.model_selection import StratifiedKFold
 import pandas as pd
 from sklearn.metrics import roc_curve, auc,average_precision_score,f1_score,roc_auc_score
-from imblearn.over_sampling import RandomOverSampler
 import matplotlib.pyplot as plt
 import numpy as np
 import statistics
@@ -144,8 +143,6 @@ def train_lr(data,n_folds,target,lr_config_path = None):
         y_train = np.array(train_data.iloc[:,-1])
         X_test = np.array(test_data.iloc[:,:-1])
         y_test = np.array(test_data.iloc[:,-1])
-        ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
-        X_train, y_train = ros.fit_resample(X_train, y_train)
         if lr_config_path != None:
             lr_fold_config = lr_config_path+str(i)+'_ratio_1.0_5fold.json'
             lr_fold_config = json.load(open(lr_fold_config))
@@ -182,8 +179,6 @@ def train_rf(data,n_folds,target,rf_config_path = None):
         y_train = np.array(train_data.iloc[:,-1])
         X_test = np.array(test_data.iloc[:,:-1])
         y_test = np.array(test_data.iloc[:,-1])
-        ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
-        X_train, y_train = ros.fit_resample(X_train, y_train)
         if rf_config_path != None:
             rf_fold_config = rf_config_path+str(i)+'_ratio_1.0_5fold.json'
             rf_fold_config = json.load(open(rf_fold_config))
@@ -214,8 +209,6 @@ def train_xgb(data,n_folds,target,xgb_config_path = None):
         train_data = move2last(train_data,'label')
         X_train = np.array(train_data.iloc[:,:-1])
         y_train = np.array(train_data.iloc[:,-1])
-        ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
-        X_train, y_train = ros.fit_resample(X_train, y_train)
         X_test = np.array(test_data.iloc[:,:-1])
         y_test = np.array(test_data.iloc[:,-1])
         class_weights = compute_class_weight('balanced', classes=np.array([0, 1]), y=y_train)
@@ -248,9 +241,7 @@ def train_MLP(data,n_folds,target,mlp_config_path = None):
         test_data = data.iloc[test_index,:]
         train_data = pd.concat([train_data,target_fold])
         train_data = move2last(train_data,'label')
-        ros = RandomOverSampler(sampling_strategy=0.1, random_state=123)
         X_train,y_train = train_data.iloc[:,:-1],train_data.iloc[:,-1]
-        X_train, y_train = ros.fit_resample(X_train, y_train)
         X_train = torch.tensor(np.array(X_train),dtype = torch.float32)
         y_train = torch.tensor(np.array(y_train),dtype = torch.float32).unsqueeze(1)
         X_test = torch.tensor(np.array(test_data.iloc[:,:-1]),dtype = torch.float32)
@@ -278,18 +269,18 @@ def train_MLP(data,n_folds,target,mlp_config_path = None):
                 elif activation_type == 'relu':
                     seed_everything()
                     model = MLP_2_relu(X_train.shape[1],hidden_size=hidden_size,dropout_rate=0.3)
-            # n_pos = y_train.sum().item()
-            # n_neg = y_train.numel() - n_pos
-            # pos_w = torch.tensor([n_neg / n_pos])
-            criterion = nn.BCEWithLogitsLoss()
+            n_pos = y_train.sum().item()
+            n_neg = y_train.numel() - n_pos
+            pos_w = torch.tensor([n_neg / n_pos])
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
         else:
             seed_everything()
-            model = MLP_1_relu(X_train.shape[1],hidden_size=128,dropout_rate=0.5)
-            # n_pos = y_train.sum().item()
-            # n_neg = y_train.numel() - n_pos
-            # pos_w = torch.tensor([n_neg / n_pos])
-            criterion = nn.BCEWithLogitsLoss()
+            model = MLP_1_relu(X_train.shape[1],hidden_size=128,dropout_rate=0.3)
+            n_pos = y_train.sum().item()
+            n_neg = y_train.numel() - n_pos
+            pos_w = torch.tensor([n_neg / n_pos])
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
             optimizer = optim.Adam(model.parameters(), lr=1e-3)
         train_dataset = CustomDataset(X_train,y_train)
         seed_everything()
@@ -467,24 +458,23 @@ def calc_Comparison_Metrics(feature_path_list,feature_list,n_fold,save_path,data
         mean_prc_df.to_csv(save_path+model_name+'_'+data_name+'mean_prc_df.csv')
         sem_prc_df.to_csv(save_path+model_name+'_'+data_name+'sem_prc_df.csv')
 if __name__=='__main__':
-    DATA_DIREC = '../../Data/'
-    PLOT_DIREC = '../../Plot/'
+    # mapper = HGNCMapper('../../Data/Graphs/9606.protein.info.v11.5.txt.gz', '../../Data/Graphs/9606.protein.aliases.v11.5.txt.gz')
     feature_list = ['Abundance','Subcell','Source_Target_Relation','GO','All']
-    feature_path_list = [DATA_DIREC+'SREBP2/split_feature_group/abundance_feature_SREBP2.csv',
-                         DATA_DIREC+'SREBP2/split_feature_group/localization_feature_SREBP2.csv',
-                        DATA_DIREC+'SREBP2/split_feature_group/ppi_feature_SREBP2.csv',
-                        DATA_DIREC+'SREBP2/split_feature_group/go_feature_SREBP2.csv',
-                        DATA_DIREC+'train_node_attribute_SREBP2_with_target_feature.csv'
+    feature_path_list = ['../../Data/SREBP2/split_feature_group/abundance_feature_SREBP2.csv',
+                         '../../Data/SREBP2/split_feature_group/localization_feature_SREBP2.csv',
+                        '../../Data/SREBP2/split_feature_group/ppi_feature_SREBP2.csv',
+                        '../../Data/SREBP2/split_feature_group/go_feature_SREBP2.csv',
+                        '../../Data/SREBP2/train_node_attribute_SREBP2_with_target_feature.csv'
                         ]
     calc_Comparison_Metrics(feature_path_list,feature_list,n_fold=5,
-                        save_path = PLOT_DIREC+'SREBP2/',
+                        save_path = '../../Plot/SREBP2/',
                         data_name = 'Feature_group_comparison_SREBP2_',
-                        target=list(np.load(DATA_DIREC+'targets/SREBP2_target.npy')),
+                        target=list(np.load('../../Data/targets/SREBP2_target.npy')),
                         phenotype = 'SREBP2',
-                        lr_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_LogisticRegression_subset_False_fold_',
-                        rf_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_RandomForest_subset_False_fold_',
-                        xgb_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_XGBoost_subset_False_fold_',
-                        mlp_config = DATA_DIREC+'config/SREBP2/best_paras_SREBP2_MLP_subset_False_fold_'
+                        lr_config = '../../config/SREBP2/best_paras_SREBP2_LogisticRegression_subset_False_fold_',
+                        rf_config = '../../config/SREBP2/best_paras_SREBP2_RandomForest_subset_False_fold_',
+                        xgb_config = '../../config/SREBP2/best_paras_SREBP2_XGBoost_subset_False_fold_',
+                        mlp_config = '../../config/SREBP2/best_paras_SREBP2_MLP_subset_False_fold_'
                         )
 
    
